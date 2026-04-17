@@ -14,6 +14,7 @@ import antivirus.sandbox.SandboxExecutor;
 import antivirus.scanner.EntropyAnalyzer;
 import antivirus.scanner.ExtensionChecker;
 import antivirus.scanner.PEAnalyzer;
+import antivirus.scanner.PEAnalysis;
 import antivirus.scanner.ScanResult;
 import antivirus.scanner.StringDetector;
 
@@ -265,18 +266,3 @@ case "3":
     }
 }
 
-class PEAnalysis {
-    private final boolean validPE;
-    private final boolean hasPackerSections;
-    private final boolean writeAndExecute;
-
-    public PEAnalysis(boolean validPE, boolean hasPackerSections, boolean writeAndExecute) {
-        this.validPE = validPE;
-        this.hasPackerSections = hasPackerSections;
-        this.writeAndExecute = writeAndExecute;
-    }
-
-    public boolean isValidPE() { return validPE; }
-    public boolean hasPackerSections() { return hasPackerSections; }
-    public boolean hasWriteAndExecute() { return writeAndExecute; }
-}
