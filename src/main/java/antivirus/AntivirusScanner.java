@@ -65,16 +65,20 @@ public class AntivirusScanner {
     }
 
     public ScanResult scanFile(String filePath) throws IOException {
-        return scanFile(filePath, false, false);
+        return scanFile(filePath, false, false, false);
     }
 
     public ScanResult scanFile(String filePath, boolean autoAction) throws IOException {
-        return scanFile(filePath, autoAction, false);
+        return scanFile(filePath, autoAction, false, false);
+    }
+
+    public ScanResult scanFile(String filePath, boolean autoAction, boolean runSandbox) throws IOException {
+        return scanFile(filePath, autoAction, runSandbox, false);
     }
 
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
 
-    public ScanResult scanFile(String filePath, boolean autoAction, boolean runSandbox) throws IOException {
+    public ScanResult scanFile(String filePath, boolean autoAction, boolean runSandbox, boolean decompress) throws IOException {
         Path path = Path.of(filePath);
 
         if (HashCache.isCached(path)) {
@@ -145,6 +149,35 @@ public class AntivirusScanner {
 
         byte[] fileData = Files.readAllBytes(path);
         String fileName = path.getFileName().toString();
+        String lowerName = fileName.toLowerCase();
+        List<String> threats = new ArrayList<>();
+
+        if (decompress && (lowerName.endsWith(".zip") || lowerName.endsWith(".jar"))) {
+            logger.info(AntivirusLogger.Category.SCANNER, "Extraindo e analisando: " + filePath);
+            ZipExtractor.ExtractResult zr = ZipExtractor.extract(fileData, fileName);
+            if (zr.success && zr.tempDir != null) {
+                logger.info(AntivirusLogger.Category.SCANNER, "ZIP extraido: " + zr.filesFound + " arquivos");
+                threats.add("ZIP extraido: " + zr.filesFound + " arquivos, " + (zr.totalSize / 1024) + "KB");
+
+                try {
+                    List<Path> zipFiles = Files.walk(zr.tempDir)
+                        .filter(p -> p.toFile().isFile())
+                        .limit(50)
+                        .toList();
+
+                    for (Path zp : zipFiles) {
+                        if (tryScanZipFile(zp.toString())) {
+                            threats.add("AMEACA no ZIP: " + zp.getFileName());
+                            logger.warn(AntivirusLogger.Category.SCANNER, "AMEACA no ZIP: " + zp);
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.info(AntivirusLogger.Category.SCANNER, "Erro ao analisar: " + e.getMessage());
+                }
+
+                ZipExtractor.cleanup(zr.tempDir);
+            }
+        }
 
         logger.info(AntivirusLogger.Category.SCANNER, "Iniciando escaneamento: " + filePath);
 
@@ -163,8 +196,8 @@ public class AntivirusScanner {
         }
         
         String threatLevel = getThreatLevel(score);
-        List<String> threats = buildThreats(entropy, suspiciousStrings, doubleExtension, peAnalysis, passwordStealerPatterns, category);
-        
+        threats.addAll(buildThreats(entropy, suspiciousStrings, doubleExtension, peAnalysis, passwordStealerPatterns, category));
+
         boolean quarantined = false;
         boolean processKilled = false;
         boolean sandboxExecuted = false;
@@ -239,6 +272,27 @@ public class AntivirusScanner {
         if (score >= 45) return "MEDIO";
         if (score >= 25) return "BAIXO";
         return "SEGURO";
+    }
+
+    private boolean tryScanZipFile(String filePath) {
+        try {
+            Path path = Path.of(filePath);
+            if (!path.toFile().isFile()) return false;
+
+            byte[] data = Files.readAllBytes(path);
+            double entropy = entropyAnalyzer.calculateEntropy(data);
+            List<String> strings = stringDetector.detect(data);
+            boolean doubleExt = extensionChecker.check(path.getFileName().toString());
+
+            int score = 0;
+            if (entropy > 7.8) score += 40;
+            if (strings.size() >= 2) score += 20;
+            if (doubleExt) score += 50;
+
+            return score >= 45;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private List<String> buildThreats(double entropy, List<String> suspicious, boolean doubleExt, PEAnalysis pe, List<String> passwordStealer, StringDetector.MalwareCategory category) {
@@ -380,6 +434,13 @@ public class AntivirusScanner {
             }
             boolean autoAction = args.length > 1 && args[1].equals("--action");
             boolean runSandbox = args.length > 2 && args[2].equals("--sandbox");
+            boolean decompress = false;
+            for (String arg : args) {
+                if (arg.equals("-d") || arg.equals("--decompress")) {
+                    decompress = true;
+                    break;
+                }
+            }
             Path path = Path.of(args[0]);
 
             if (Files.isDirectory(path)) {
@@ -391,7 +452,7 @@ public class AntivirusScanner {
                     System.out.println("---");
                 }
             } else {
-                ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox);
+                ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox, decompress);
                 System.out.println(result);
             }
             return;
