@@ -18,6 +18,7 @@ import antivirus.logging.AntivirusLogger;
 import antivirus.sandbox.SandboxExecutor;
 import antivirus.scanner.EntropyAnalyzer;
 import antivirus.scanner.ExtensionChecker;
+import antivirus.scanner.HashCache;
 import antivirus.scanner.PEAnalyzer;
 import antivirus.scanner.PEAnalysis;
 import antivirus.scanner.ScanResult;
@@ -45,6 +46,8 @@ public class AntivirusScanner {
         this.logger = AntivirusLogger.getInstance();
         this.sandboxExecutor = new SandboxExecutor();
         this.sandboxAvailable = sandboxExecutor.getSandboxType() != SandboxExecutor.SandboxType.NATIVE;
+        HashCache.init();
+        this.logger.info(AntivirusLogger.Category.SYSTEM, "Cache carregado: " + HashCache.size() + " entradas");
 
         this.logger.info(AntivirusLogger.Category.SYSTEM, "Antivirus iniciado");
         if (sandboxAvailable) {
@@ -72,6 +75,24 @@ public class AntivirusScanner {
 
     public ScanResult scanFile(String filePath, boolean autoAction, boolean runSandbox) throws IOException {
         Path path = Path.of(filePath);
+
+        if (HashCache.isCached(path)) {
+            String cachedResult = HashCache.getCachedResult(path);
+            logger.info(AntivirusLogger.Category.SCANNER, "Cache hit: " + filePath);
+            return new ScanResult(
+                path.getFileName().toString(),
+                Files.size(path),
+                0,
+                List.of(),
+                false,
+                false,
+                cachedResult,
+                List.of("Resultado em cache"),
+                false,
+                false
+            );
+        }
+
         long fileSize = Files.size(path);
 
         if (fileSize > MAX_FILE_SIZE) {
@@ -146,6 +167,11 @@ public class AntivirusScanner {
         }
 
         logger.logScan(filePath, threatLevel, threats);
+        HashCache.put(path, threatLevel);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            HashCache.save();
+        }));
 
         return new ScanResult(
             fileName,
