@@ -16,6 +16,8 @@ public class SandboxExecutor {
     private static final String LOG_DIR = System.getProperty("user.home") + "/.antivirus/logs";
     private SandboxType sandboxType;
     private String sessionId;
+    private Path sandboxTmpDir;
+    private boolean useTmpfs;
 
     public enum SandboxType {
         FIREJAIL,
@@ -27,10 +29,30 @@ public class SandboxExecutor {
     public SandboxExecutor() {
         this.sessionId = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         this.sandboxType = detectAvailableSandbox();
+        this.useTmpfs = true;
         try {
             Files.createDirectories(Path.of(LOG_DIR));
+            if (useTmpfs) {
+                this.sandboxTmpDir = Files.createTempDirectory(Path.of("/tmp"), "antivirus_sandbox_");
+            }
         } catch (IOException e) {
             System.err.println("Erro ao criar diretorio de logs: " + e.getMessage());
+            this.sandboxTmpDir = null;
+        }
+    }
+
+    public SandboxExecutor(boolean useTmpfs) {
+        this.sessionId = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        this.sandboxType = detectAvailableSandbox();
+        this.useTmpfs = useTmpfs;
+        try {
+            Files.createDirectories(Path.of(LOG_DIR));
+            if (useTmpfs) {
+                this.sandboxTmpDir = Files.createTempDirectory(Path.of("/tmp"), "antivirus_sandbox_");
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao criar diretorio de logs: " + e.getMessage());
+            this.sandboxTmpDir = null;
         }
     }
 
@@ -76,7 +98,7 @@ public class SandboxExecutor {
         String stderr = "";
         int exitCode = -1;
 
-        logActivity("INICIO", "Executando " + filePath + " em sandbox: " + sandboxType);
+        logActivity("INICIO", "Executando " + filePath + " em sandbox: " + sandboxType + " (tmpfs=" + useTmpfs + ")");
 
         try {
             ProcessBuilder pb = buildSandboxProcess(executable);
@@ -109,26 +131,41 @@ public class SandboxExecutor {
     private ProcessBuilder buildSandboxProcess(Path executable) {
         ProcessBuilder pb;
 
+        Path executableInSandbox = executable;
+
+        if (useTmpfs && sandboxTmpDir != null) {
+            try {
+                Path target = sandboxTmpDir.resolve(executable.getFileName());
+                Files.copy(executable, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                executableInSandbox = target;
+                logActivity("TMPFS", "Arquivo copiado para: " + sandboxTmpDir);
+            } catch (IOException e) {
+                logActivity("ERRO", "Falha ao copiar para tmpfs: " + e.getMessage());
+            }
+        }
+
         switch (sandboxType) {
             case FIREJAIL:
-                pb = new ProcessBuilder("firejail", "--private", "--net=none",
-                    "--no-tty", "--quiet", executable.toString());
+                pb = new ProcessBuilder("firejail", "--private", "--private-tmp",
+                    "--net=none", "--no-tty", "--quiet",
+                    executableInSandbox.toString());
                 break;
 
             case GVISOR:
                 pb = new ProcessBuilder("runsc", "--fs=readonly", "--net=none",
-                    "--cpu=none", "--memory=512m", "run", sessionId, executable.toString());
+                    "--cpu=none", "--memory=512m", "run", sessionId, executableInSandbox.toString());
                 break;
 
             case DOCKER:
                 pb = new ProcessBuilder("docker", "run", "--rm", "--network=none",
-                    "--memory=512m", "--cpus=0.5", "--read-only=true",
-                    "-v", executable.getParent() + ":/sandbox:ro",
-                    "alpine:latest", "/sandbox/" + executable.getFileName());
+                    "--memory=512m", "--cpus=0.5", "--read-only=true", "--tmpfs", "/tmp",
+                    "-v", executableInSandbox.getParent() + ":/sandbox:ro",
+                    "alpine:latest", "/sandbox/" + executableInSandbox.getFileName());
                 break;
 
             default:
-                pb = new ProcessBuilder(executable.toString());
+                pb = new ProcessBuilder(executableInSandbox.toString());
+                pb.directory(sandboxTmpDir != null ? sandboxTmpDir.toFile() : null);
                 pb.environment().clear();
                 break;
         }
@@ -142,8 +179,31 @@ public class SandboxExecutor {
         behaviors.add("Arquivo: " + executable.getFileName());
         behaviors.add("Tamanho: " + getFileSize(executable) + " bytes");
         behaviors.add("Sandbox: " + sandboxType);
+        behaviors.add("Tmpfs efemero: " + (useTmpfs ? "SIM" : "NAO"));
+        if (useTmpfs && sandboxTmpDir != null) {
+            behaviors.add("Diretorio tmpfs: " + sandboxTmpDir);
+        }
 
         return behaviors;
+    }
+
+    public void cleanup() {
+        if (sandboxTmpDir != null && Files.exists(sandboxTmpDir)) {
+            try {
+                Files.walk(sandboxTmpDir)
+                    .sorted(java.util.Comparator.reverseOrder())
+                    .forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (IOException e) {
+                            // ignora
+                        }
+                    });
+                logActivity("CLEANUP", "Tmpfs清洁ado: " + sandboxTmpDir);
+            } catch (IOException e) {
+                logActivity("ERRO", "Falha no cleanup: " + e.getMessage());
+            }
+        }
     }
 
     private long getFileSize(Path file) {
