@@ -316,8 +316,8 @@ public class AntivirusScanner {
         return scanDirectory(dirPath, autoAction, false);
     }
 
-    private static final String[] SKIP_DIRS = {"/proc", "/sys", "/dev", "/run", "/tmp", ".cache", "node_modules", ".npm", ".gradle", "vendor", "bin/lib", "modules", ".local", "wokwi"};
-    private static final String[] SKIP_EXT = {".pak", ".dat", ".idx", ".db", ".sqlite", ".map", ".bin", ".elf"};
+    private static final String[] SKIP_DIRS = {"/proc", "/sys", "/dev", "/run", "/tmp"};
+    private static final String[] SKIP_EXT = {".pak", ".map"};
     private static final int PARALLEL_THREADS = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
 
     private static final int BATCH_SIZE = 500;
