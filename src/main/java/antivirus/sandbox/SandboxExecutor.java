@@ -146,30 +146,66 @@ public class SandboxExecutor {
 
         switch (sandboxType) {
             case FIREJAIL:
-                pb = new ProcessBuilder("firejail", "--private", "--private-tmp",
-                    "--net=none", "--no-tty", "--quiet",
+                pb = new ProcessBuilder("firejail", 
+                    "--private", 
+                    "--private-tmp",
+                    "--net=none", 
+                    "--no-tty", 
+                    "--quiet",
+                    "--disable-mnt",
+                    "--disable-dev",
+                    "--disable-proc",
+                    "--caps.drop=all",
                     executableInSandbox.toString());
                 break;
 
             case GVISOR:
                 pb = new ProcessBuilder("runsc", "--fs=readonly", "--net=none",
-                    "--cpu=none", "--memory=512m", "run", sessionId, executableInSandbox.toString());
+                    "--cpu=none", "--memory=512m", 
+                    "--host-override", "false",
+                    "run", sessionId, executableInSandbox.toString());
                 break;
 
             case DOCKER:
                 pb = new ProcessBuilder("docker", "run", "--rm", "--network=none",
-                    "--memory=512m", "--cpus=0.5", "--read-only=true", "--tmpfs", "/tmp",
+                    "--memory=512m", "--cpus=0.5", 
+                    "--read-only=true", 
+                    "--tmpfs", "/tmp",
+                    "--tmpfs", "/var/tmp",
+                    "--cap-drop=ALL",
+                    "--security-opt", "no-new-privileges:true",
                     "-v", executableInSandbox.getParent() + ":/sandbox:ro",
                     "alpine:latest", "/sandbox/" + executableInSandbox.getFileName());
                 break;
 
+case NATIVE:
+                pb = buildNativeSandbox(executableInSandbox);
+                break;
+
             default:
-                pb = new ProcessBuilder(executableInSandbox.toString());
-                pb.directory(sandboxTmpDir != null ? sandboxTmpDir.toFile() : null);
-                pb.environment().clear();
+                pb = buildNativeSandbox(executableInSandbox);
                 break;
         }
 
+        return pb;
+    }
+
+    private ProcessBuilder buildNativeSandbox(Path executable) {
+        List<String> args = new ArrayList<>();
+        
+        if (checkCommand("unshare")) {
+            args.add("unshare");
+            args.add("--mount");
+            args.add("--pid");
+            args.add("--fork");
+        }
+        
+        args.add(executable.toString());
+        
+        ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
+        pb.directory(sandboxTmpDir != null ? sandboxTmpDir.toFile() : null);
+        pb.environment().clear();
+        
         return pb;
     }
 
