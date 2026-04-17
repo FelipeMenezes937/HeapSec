@@ -115,25 +115,24 @@ public class HashCache {
 
     public static boolean isCached(Path file) {
         String key = file.toAbsolutePath().toString();
-        CacheEntry entry = cache.get(key);
-        if (entry == null) return false;
-
-        try {
-            long currentSize = Files.size(file);
-            if (currentSize != entry.fileSize) {
-                cache.remove(key);
-                return false;
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        return cache.containsKey(key);
     }
 
     public static String getCachedResult(Path file) {
         String key = file.toAbsolutePath().toString();
         CacheEntry entry = cache.get(key);
-        return entry != null ? entry.result : null;
+        if (entry == null) return null;
+
+        try {
+            long currentSize = Files.size(file);
+            if (currentSize != entry.fileSize) {
+                cache.remove(key);
+                return null;
+            }
+            return entry.result;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public static void put(Path file, String result) {

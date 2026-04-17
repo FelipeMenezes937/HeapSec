@@ -77,11 +77,12 @@ public class AntivirusScanner {
         Path path = Path.of(filePath);
 
         if (HashCache.isCached(path)) {
+            long fileSize = Files.size(path);
             String cachedResult = HashCache.getCachedResult(path);
             logger.info(AntivirusLogger.Category.SCANNER, "Cache hit: " + filePath);
             return new ScanResult(
                 path.getFileName().toString(),
-                Files.size(path),
+                fileSize,
                 0,
                 List.of(),
                 false,
@@ -168,10 +169,7 @@ public class AntivirusScanner {
 
         logger.logScan(filePath, threatLevel, threats);
         HashCache.put(path, threatLevel);
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            HashCache.save();
-        }));
+        HashCache.save();
 
         return new ScanResult(
             fileName,
