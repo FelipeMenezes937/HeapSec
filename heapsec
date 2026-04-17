@@ -1,26 +1,48 @@
 #!/bin/bash
-# Antivirus wrapper script
-# Usage: antivirus [opcoes]
-#   -d, --decompress  extrair e escanear ZIPs
-#   -h, --help       ajuda
+# HeapSec - Scanner antivírus
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CP="$SCRIPT_DIR/out/production/antivirus"
-MAIN="antivirus.AntivirusScanner"
+CP="$(cd "$(dirname "$0")" && pwd)/out"
 
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    echo "Usage: antivirus [opcoes]"
-    echo "  (sem args)   - menu interativo"
-    echo "  arquivo     - escanear arquivo"
-    echo "  /pasta     - escanear diretorio"
-    echo "  --action   - quarentenar automaticamente"
-    echo "  -d, --decompress - extrair e escanear ZIPs (varredura pesada)"
-    echo "  -l, --logs - ver logs"
-    echo "  -w, --watch - watch logs"
-    echo "  -D, --daemon - modo daemon"
+    echo "HeapSec - Antivírus Local"
+    echo ""
+    echo "Uso: heapsec [opção]"
+    echo ""
+    echo "Opções:"
+    echo "  (vazio)    Menu interativo"
+    echo "  <path>    Escanear arquivo ou diretório"
+    echo "  -m <path> Monitor (não-loop, varre uma vez)"
+    echo "  -l        Ver logs"
+    echo "  -w        Watch logs"
+    echo "  -h        Esta ajuda"
+    echo ""
+    echo "Exemplos:"
+    echo "  heapsec                    # menu"
+    echo "  heapsec Downloads/         # escaneia diretório"
+    echo "  heapsec -m Downloads/      # monitor varredura única"
+    echo "  heapsec -l                 # ver logs"
     exit 0
 fi
 
-java -cp "$CP" "$MAIN" "$@"
+if [ "$1" = "-l" ]; then
+    java -cp "$CP" antivirus.AntivirusScanner -l
+    exit 0
+fi
 
-exit $?
+if [ "$1" = "-w" ]; then
+    java -cp "$CP" antivirus.AntivirusScanner -w
+    exit 0
+fi
+
+if [ "$1" = "-m" ]; then
+    shift
+    java -cp "$CP" antivirus.monitor.ProcessMonitor "$@"
+    exit 0
+fi
+
+if [ -z "$1" ]; then
+    java -cp "$CP" antivirus.AntivirusScanner
+    exit 0
+fi
+
+java -cp "$CP" antivirus.AntivirusScanner "$@"
