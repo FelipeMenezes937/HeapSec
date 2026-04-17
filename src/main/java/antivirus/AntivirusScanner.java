@@ -71,12 +71,13 @@ public class AntivirusScanner {
 
         double entropy = entropyAnalyzer.calculateEntropy(fileData);
         List<String> suspiciousStrings = stringDetector.detect(fileData);
+        List<String> passwordStealerPatterns = stringDetector.detectPasswordStealer(fileData);
         boolean doubleExtension = extensionChecker.check(fileName);
         PEAnalysis peAnalysis = peAnalyzer.analyze(fileData);
 
-        int score = calculateThreatScore(entropy, suspiciousStrings.size(), doubleExtension, peAnalysis);
+        int score = calculateThreatScore(entropy, suspiciousStrings.size(), doubleExtension, peAnalysis, passwordStealerPatterns.size());
         String threatLevel = getThreatLevel(score);
-        List<String> threats = buildThreats(entropy, suspiciousStrings, doubleExtension, peAnalysis);
+        List<String> threats = buildThreats(entropy, suspiciousStrings, doubleExtension, peAnalysis, passwordStealerPatterns);
         
         boolean quarantined = false;
         boolean processKilled = false;
@@ -128,7 +129,7 @@ public class AntivirusScanner {
         );
     }
 
-    private int calculateThreatScore(double entropy, int suspiciousCount, boolean doubleExt, PEAnalysis peAnalysis) {
+    private int calculateThreatScore(double entropy, int suspiciousCount, boolean doubleExt, PEAnalysis peAnalysis, int passwordStealerCount) {
         int score = 0;
         if (entropy > 7.5) score += 40;
         else if (entropy > 6.0) score += 20;
@@ -137,6 +138,11 @@ public class AntivirusScanner {
         if (doubleExt) score += 50;
         if (peAnalysis.hasPackerSections()) score += 30;
         if (peAnalysis.hasWriteAndExecute()) score += 40;
+        
+        if (passwordStealerCount >= 5) score += 50;
+        else if (passwordStealerCount >= 3) score += 30;
+        else if (passwordStealerCount > 0) score += 20;
+        
         return score;
     }
 
@@ -148,7 +154,7 @@ public class AntivirusScanner {
         return "SEGURO";
     }
 
-    private List<String> buildThreats(double entropy, List<String> suspicious, boolean doubleExt, PEAnalysis pe) {
+    private List<String> buildThreats(double entropy, List<String> suspicious, boolean doubleExt, PEAnalysis pe, List<String> passwordStealer) {
         List<String> threats = new ArrayList<>();
         if (entropy > 7.5) threats.add(String.format("Alta entropia (%.2f)", entropy));
         else if (entropy > 6.0) threats.add(String.format("Entropia moderada (%.2f)", entropy));
@@ -156,6 +162,9 @@ public class AntivirusScanner {
         if (doubleExt) threats.add("Extensao dupla");
         if (pe.hasPackerSections()) threats.add("Secoes de packer detectadas");
         if (pe.hasWriteAndExecute()) threats.add("Secao com Write+Execute");
+        if (!passwordStealer.isEmpty()) {
+            threats.add("Password stealer: " + String.join(", ", passwordStealer));
+        }
         return threats;
     }
 
