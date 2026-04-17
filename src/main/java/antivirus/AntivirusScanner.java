@@ -73,12 +73,19 @@ public class AntivirusScanner {
         double entropy = entropyAnalyzer.calculateEntropy(fileData);
         List<String> suspiciousStrings = stringDetector.detect(fileData);
         List<String> passwordStealerPatterns = stringDetector.detectPasswordStealer(fileData);
+        StringDetector.MalwareCategory category = stringDetector.detectCategory(fileData);
+        int categoryScore = stringDetector.getCategoryScore(fileData);
         boolean doubleExtension = extensionChecker.check(fileName);
         PEAnalysis peAnalysis = peAnalyzer.analyze(fileData);
 
         int score = calculateThreatScore(entropy, suspiciousStrings.size(), doubleExtension, peAnalysis, passwordStealerPatterns.size());
+        
+        if (categoryScore > 0) {
+            score += categoryScore;
+        }
+        
         String threatLevel = getThreatLevel(score);
-        List<String> threats = buildThreats(entropy, suspiciousStrings, doubleExtension, peAnalysis, passwordStealerPatterns);
+        List<String> threats = buildThreats(entropy, suspiciousStrings, doubleExtension, peAnalysis, passwordStealerPatterns, category);
         
         boolean quarantined = false;
         boolean processKilled = false;
@@ -155,7 +162,7 @@ public class AntivirusScanner {
         return "SEGURO";
     }
 
-    private List<String> buildThreats(double entropy, List<String> suspicious, boolean doubleExt, PEAnalysis pe, List<String> passwordStealer) {
+    private List<String> buildThreats(double entropy, List<String> suspicious, boolean doubleExt, PEAnalysis pe, List<String> passwordStealer, StringDetector.MalwareCategory category) {
         List<String> threats = new ArrayList<>();
         if (entropy > 7.5) threats.add(String.format("Alta entropia (%.2f)", entropy));
         else if (entropy > 6.0) threats.add(String.format("Entropia moderada (%.2f)", entropy));
@@ -165,6 +172,9 @@ public class AntivirusScanner {
         if (pe.hasWriteAndExecute()) threats.add("Secao com Write+Execute");
         if (!passwordStealer.isEmpty()) {
             threats.add("Password stealer: " + String.join(", ", passwordStealer));
+        }
+        if (category != StringDetector.MalwareCategory.UNKNOWN) {
+            threats.add("Categoria: " + category);
         }
         return threats;
     }
