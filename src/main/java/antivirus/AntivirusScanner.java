@@ -411,8 +411,14 @@ public class AntivirusScanner {
         AntivirusScanner scanner = new AntivirusScanner();
         AntivirusLogger logger = AntivirusLogger.getInstance();
         Scanner input = new Scanner(System.in);
-        
-        if (args.length > 0) {
+
+        // Menu interativo se sem args
+        if (args.length == 0) {
+            runInteractiveMenu(scanner, input);
+            return;
+        }
+
+        if (args[0].equals("--daemon")) {
             if (args[0].equals("--daemon")) {
                 String watchPath = args.length > 1 ? args[1] : System.getenv("HOME");
                 boolean autoQuar = args.length > 2 && args[2].equals("--action");
@@ -624,6 +630,60 @@ public class AntivirusScanner {
             } catch (InterruptedException e) {
                 System.out.println("\nParado.");
                 break;
+            }
+        }
+    }
+
+    private static void runInteractiveMenu(AntivirusScanner scanner, Scanner input) {
+        while (true) {
+            System.out.println("""
+
+                === HeapSec ===
+                1. Escanear arquivo
+                2. Escanear diretorio
+                3. Ver quarentena
+                4. Ver logs
+                5. Watch logs
+                6. Daemon
+                7. Ajuda
+                8. Sair
+                """);
+            System.out.print("> ");
+
+            String choice = input.nextLine().trim();
+
+            switch (choice) {
+                case "1", "file" -> {
+                    System.out.print("Arquivo: ");
+                    String f = input.nextLine().trim();
+                    if (!f.isEmpty()) {
+                        try { System.out.println(scanner.scanFile(f, false, false, false)); } 
+                        catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
+                    }
+                }
+                case "2", "dir" -> {
+                    System.out.print("Diretorio: ");
+                    String d = input.nextLine().trim();
+                    if (!d.isEmpty()) {
+                        try { 
+                            var r = scanner.scanDirectory(d, false, false);
+                            System.out.println("Total: " + r.size() + " arquivos");
+                            r.stream().filter(x -> !x.getScore().equals("SEGURO"))
+                                .forEach(x -> System.out.println("- " + x.getFileName() + ": " + x.getScore()));
+                        } catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
+                    }
+                }
+                case "3", "q" -> scanner.getQuarantineManager().listQuarantined();
+                case "4", "l" -> AntivirusLogger.getInstance().getLogs().forEach(System.out::println);
+                case "5", "w" -> watchLogs();
+                case "6", "d" -> {
+                    System.out.print("Path: ");
+                    String p = input.nextLine().trim();
+                    if (!p.isEmpty()) startDaemon(scanner, p, false);
+                }
+                case "7", "h" -> System.out.println("Uso: ./heapsec <arq> | ./heapsec -d <arq> | ./heapsec -l | ./heapsec -w");
+                case "8", "quit" -> { return; }
+                default -> {}
             }
         }
     }
