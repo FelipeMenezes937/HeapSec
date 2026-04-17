@@ -1,0 +1,11 @@
+#!/bin/bash
+# Antivirus wrapper script
+# Usage: antivirus [file] [--action] [--sandbox] [-l|--logs]
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CP="$SCRIPT_DIR/out/production/antivirus"
+MAIN="antivirus.AntivirusScanner"
+
+java -cp "$CP" "$MAIN" "$@"
+
+exit $?
