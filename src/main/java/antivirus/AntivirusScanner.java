@@ -96,6 +96,21 @@ public class AntivirusScanner {
 
         long fileSize;
         try {
+            if (Files.isDirectory(path)) {
+                List<ScanResult> results = scanDirectory(path.toString(), false, false);
+                return new ScanResult(
+                    path.getFileName().toString(),
+                    0,
+                    0,
+                    List.of(),
+                    false,
+                    false,
+                    "DIRETORIO",
+                    List.of("Escaneado " + results.size() + " arquivos"),
+                    false,
+                    false
+                );
+            }
             fileSize = Files.size(path);
         } catch (Exception e) {
             return new ScanResult(
