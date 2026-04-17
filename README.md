@@ -27,6 +27,8 @@ Scanner antivírus heurístico 100% local em Java 21.
 
 ## Uso
 
+### CLI (Linha de Comando)
+
 ```bash
 ./antivirus                  # Menu interativo
 ./antivirus arquivo.exe     # Escanear arquivo
@@ -38,6 +40,28 @@ Scanner antivírus heurístico 100% local em Java 21.
 ./antivirus -D            # Modo daemon (background)
 ./antivirus -h            # Ajuda
 ```
+
+### Monitor de Processos
+
+O monitor escanea processos em execução periodicamente:
+
+```bash
+java -cp target/classes antivirus.monitor.ProcessMonitor [intervalo_segundos]
+```
+
+Exemplo:
+```bash
+java -cp target/classes antivirus.monitor.ProcessMonitor 30
+```
+
+Opções do menu interativo (via CLI):
+1. Escanear arquivo
+2. Escanear diretório (lote)
+3. Ver quarentena
+4. Ver últimos logs
+5. Watch logs em tempo real
+6. Modo daemon (monitoramento de arquivos)
+8. Sair
 
 ## Detecção
 
