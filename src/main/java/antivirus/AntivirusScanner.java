@@ -23,6 +23,7 @@ import antivirus.scanner.PEAnalyzer;
 import antivirus.scanner.PEAnalysis;
 import antivirus.scanner.ScanResult;
 import antivirus.scanner.StringDetector;
+import antivirus.scanner.ZipExtractor;
 
 public class AntivirusScanner {
 

@@ -1,15 +1,8 @@
 #!/bin/bash
 # Antivirus wrapper script
-# Usage:
-#   antivirus                     - menu interativo
-#   antivirus arquivo             - escanear arquivo
-#   antivirus /pasta             - escanear diretorio
-#   antivirus arquivo --action    - escanear + quarentenar
-#   antivirus -l                  - ver logs
-#   antivirus -w                  - watch logs
-#   antivirus -d                  - modo daemon (background)
-#   antivirus -d /pasta          - daemon monitorando pasta
-#   antivirus -h                  - ajuda
+# Usage: antivirus [opcoes]
+#   -d, --decompress  extrair e escanear ZIPs
+#   -h, --help       ajuda
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CP="$SCRIPT_DIR/out/production/antivirus"
@@ -21,26 +14,10 @@ if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  arquivo     - escanear arquivo"
     echo "  /pasta     - escanear diretorio"
     echo "  --action   - quarentenar automaticamente"
+    echo "  -d, --decompress - extrair e escanear ZIPs (varredura pesada)"
     echo "  -l, --logs - ver logs"
-    echo "  -w, --watch - watch logs em tempo real"
-    echo "  -d, --daemon - modo daemon (fecha apos executar)"
-    echo "  -D          - daemon interativo (menu)"
-    echo "  -h, --help - esta ajuda"
-    exit 0
-fi
-
-if [ "$1" = "-d" ] && [ -n "$2" ] && [ "$2" != "--action" ]; then
-    echo "Iniciando daemon em background..."
-    nohup java -cp "$CP" "$MAIN" "$2" --daemon > ~/.antivirus/daemon.log 2>&1 &
-    echo "Daemon iniciado! PID: $!"
-    echo "Logs: tail -f ~/.antivirus/daemon.log"
-    exit 0
-fi
-
-if [ "$1" = "-d" ]; then
-    echo "Iniciando daemon em background..."
-    nohup java -cp "$CP" "$MAIN" > ~/.antivirus/daemon.log 2>&1 &
-    echo "Daemon iniciado! PID: $!"
+    echo "  -w, --watch - watch logs"
+    echo "  -D, --daemon - modo daemon"
     exit 0
 fi
 
