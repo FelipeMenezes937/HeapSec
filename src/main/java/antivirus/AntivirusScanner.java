@@ -328,6 +328,7 @@ public class AntivirusScanner {
 
         System.out.println("Escaneando " + dirPath + " em lotes de " + BATCH_SIZE + "...");
         System.out.println("(Ctrl+C para parar)");
+        System.out.flush();
 
         int processed = 0;
         int batchNum = 0;
@@ -339,6 +340,9 @@ public class AntivirusScanner {
                 .iterator();
 
             List<Path> batch = new ArrayList<>(BATCH_SIZE);
+
+            // Mostrar estado inicial imediatamente
+            printProgress(0, 0, 0, 0);
 
             while (it.hasNext()) {
                 batch.add(it.next());
@@ -352,7 +356,7 @@ public class AntivirusScanner {
 
                     long usedMB = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
                     usedMB /= 1024 * 1024;
-                    System.out.println("[" + batchNum + "] " + processed + " arquivos | Mem: " + usedMB + "MB | Ameacas: " + results.size());
+                    printProgress(processed, usedMB, results.size(), batchNum);
 
                     batch.clear();
                     System.gc();
@@ -362,8 +366,31 @@ public class AntivirusScanner {
             System.err.println("Escaneamento interrompido: " + e.getMessage());
         }
 
-        System.out.println("Escaneamento concluido. " + results.size() + " amenazas encontradas.");
+        System.out.println("\nEscaneamento concluido. " + results.size() + " amenazas encontradas.");
         return results;
+    }
+
+    private static void printProgress(int processed, long usedMB, int threats, int batchNum) {
+        String bar = buildProgressBar(batchNum);
+        String line = bar + " Arquivos: " + processed + " | Mem: " + usedMB + "MB | Ameacas: " + threats;
+        
+        // Limpar linha anterior e escrever nova
+        String clearLine = "\r" + "                                        " + "\r";
+        String output = clearLine + line;
+        
+        System.err.print(output);
+        System.err.flush();
+    }
+
+    private static String buildProgressBar(int batchNum) {
+        int total = 20;
+        int filled = Math.min(batchNum, total);
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < total; i++) {
+            sb.append(i < filled ? "▓" : "░");
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean runSandbox) {
@@ -412,155 +439,54 @@ public class AntivirusScanner {
         AntivirusLogger logger = AntivirusLogger.getInstance();
         Scanner input = new Scanner(System.in);
 
-        // Menu interativo se sem args
         if (args.length == 0) {
             runInteractiveMenu(scanner, input);
             return;
         }
 
-        if (args[0].equals("--daemon")) {
-            if (args[0].equals("--daemon")) {
-                String watchPath = args.length > 1 ? args[1] : System.getenv("HOME");
-                boolean autoQuar = args.length > 2 && args[2].equals("--action");
-                System.out.println("Daemon mode: " + watchPath);
-                AntivirusScanner sc = new AntivirusScanner();
-                startDaemon(sc, watchPath, autoQuar);
-                return;
-            }
-
-            if (args[0].equals("-l") || args[0].equals("--logs")) {
-                System.out.println("\n=== LOGS DO ANTIVIRUS ===");
-                logger.getLogs().forEach(System.out::println);
-                return;
-            }
-            
-            if (args[0].equals("-w") || args[0].equals("--watch")) {
-                watchLogs();
-                return;
-            }
-            boolean autoAction = args.length > 1 && args[1].equals("--action");
-            boolean runSandbox = args.length > 2 && args[2].equals("--sandbox");
-            boolean decompress = false;
-            for (String arg : args) {
-                if (arg.equals("-d") || arg.equals("--decompress")) {
-                    decompress = true;
-                    break;
-                }
-            }
-            Path path = Path.of(args[0]);
-
-            if (Files.isDirectory(path)) {
-                List<ScanResult> results = scanner.scanDirectory(args[0], autoAction, runSandbox);
-                System.out.println("\n=== RESULTADO DO ESCANEAMENTO ===");
-                System.out.println("Total de amenazas: " + results.size());
-                for (ScanResult r : results) {
-                    System.out.println(r);
-                    System.out.println("---");
-                }
-            } else {
-                ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox, decompress);
-                System.out.println(result);
-            }
+        if (args[0].equals("-l") || args[0].equals("--logs")) {
+            System.out.println("\n=== LOGS DO ANTIVIRUS ===");
+            logger.getLogs().forEach(System.out::println);
             return;
         }
         
-        while (true) {
-            System.out.println("""
+        if (args[0].equals("-w") || args[0].equals("--watch")) {
+            watchLogs();
+            return;
+        }
 
-                === ANTIVIRUS LOCAL ===
-                1. Escanear arquivo
-                2. Escanear diretorio
-                3. Ver quarentena
-                4. Ver logs
-                5. Watch logs (tempo real)
-                6. Modo daemon (monitoramento)
-                7. Ajuda
-                8. Sair
-                """);
-            System.out.print("> ");
+        if (args[0].equals("--daemon")) {
+            String watchPath = args.length > 1 ? args[1] : System.getenv("HOME");
+            boolean autoQuar = args.length > 2 && args[2].equals("--action");
+            System.out.println("Daemon mode: " + watchPath);
+            AntivirusScanner sc = new AntivirusScanner();
+            startDaemon(sc, watchPath, autoQuar);
+            return;
+        }
 
-            String choice = input.nextLine().trim();
+        boolean autoAction = false;
+        boolean runSandbox = false;
+        boolean decompress = false;
 
-            switch (choice) {
-                case "1", "arquivo", "file" -> {
-                    System.out.print("Caminho do arquivo: ");
-                    String filePath = input.nextLine().trim();
-                    if (filePath.isEmpty()) break;
-                    System.out.print("Quarentena automatica? (s/N): ");
-                    boolean auto = input.nextLine().trim().equalsIgnoreCase("s");
-                    try {
-                        System.out.println(scanner.scanFile(filePath, auto, false));
-                    } catch (Exception e) {
-                        System.out.println("Erro: " + e.getMessage());
-                    }
-                }
+        for (int i = 1; i < args.length; i++) {
+            if (args[i].equals("--action")) autoAction = true;
+            if (args[i].equals("--sandbox")) runSandbox = true;
+            if (args[i].equals("-d") || args[i].equals("--decompress")) decompress = true;
+        }
 
-                case "2", "diretorio", "dir" -> {
-                    System.out.print("Caminho do diretorio [Enter=/home/felipe]: ");
-                    String dirPath = input.nextLine().trim();
-                    if (dirPath.isEmpty()) dirPath = System.getenv("HOME");
-                    System.out.print("Quarentena automatica? (s/N): ");
-                    boolean auto = input.nextLine().trim().equalsIgnoreCase("s");
-                    System.out.println("[Enter] para iniciar...");
-                    input.nextLine();
-                    try {
-                        List<ScanResult> results = scanner.scanDirectory(dirPath, auto, false);
-                        System.out.println("\n===RESULTADO===");
-                        System.out.println("Totais: " + results.size());
-                        results.forEach(r -> System.out.println("- " + r.getFileName() + ": " + r.getScore()));
-                    } catch (Exception e) {
-                        System.out.println("Erro: " + e.getMessage());
-                    }
-                }
+        Path path = Path.of(args[0]);
 
-                case "3", "quarentena" -> scanner.getQuarantineManager().listQuarantined();
-
-                case "4", "logs", "l" -> {
-                    System.out.println("\n=== ULTIMOS LOGS ===");
-                    var logs = AntivirusLogger.getInstance().getLogs();
-                    logs.stream().skip(Math.max(0, logs.size() - 20)).forEach(System.out::println);
-                }
-
-                case "5", "watch", "w" -> watchLogs();
-
-                case "6", "daemon", "d" -> {
-                    System.out.print("Diretorio para monitorar [Enter=/home/felipe]: ");
-                    String watchPath = input.nextLine().trim();
-                    if (watchPath.isEmpty()) watchPath = System.getenv("HOME");
-                    System.out.print("Quarentena automatica? (s/N): ");
-                    boolean auto = input.nextLine().trim().equalsIgnoreCase("s");
-                    System.out.println("Iniciando daemon...");
-                    System.out.println("Monitorando: " + watchPath);
-                    System.out.println("Pressione Ctrl+C para parar");
-                    startDaemon(scanner, watchPath, auto);
-                }
-
-                case "7", "ajuda", "help", "h" -> System.out.println("""
-                    USO:
-                      antivirus arquivo.exe         - escanear arquivo
-                      antivirus /pasta           - escanear diretorio
-                      antivirus arquivo.exe --action - escanear + quarentenar
-                      antivirus -l                 - ver logs
-                      antivirus -w                 - watch logs
-
-                    MENU:
-                      1 - scan arquivo
-                      2 - scan diretorio (lote)
-                      3 - ver quarentena
-                      4 - ver ultimos 20 logs
-                      5 - watch logs tempo real
-                      6 - modo daemon (monitoramento)
-                      8 - sair
-                    """);
-
-                case "8", "sair", "exit", "quit" -> {
-                    AntivirusLogger.getInstance().info(AntivirusLogger.Category.SYSTEM, "Antivirus encerrado");
-                    System.out.println("Saindo...");
-                    return;
-                }
-
-                default -> System.out.println("Opcao invalida. Digite 7 para ajuda.");
+        if (Files.isDirectory(path)) {
+            List<ScanResult> results = scanner.scanDirectory(args[0], autoAction, runSandbox);
+            System.out.println("\n=== RESULTADO DO ESCANEAMENTO ===");
+            System.out.println("Total de amenazas: " + results.size());
+            for (ScanResult r : results) {
+                System.out.println(r);
+                System.out.println("---");
             }
+        } else {
+            ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox, decompress);
+            System.out.println(result);
         }
     }
 
