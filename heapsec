@@ -12,15 +12,17 @@ if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  (vazio)    Menu interativo"
     echo "  <path>    Escanear arquivo ou diretório"
     echo "  -m <path> Monitor (não-loop, varre uma vez)"
+    echo "  -D <path> Daemon (background, monitora em tempo real)"
     echo "  -l        Ver logs"
-    echo "  -w        Watch logs"
+    echo "  -w        Watch logs (tempo real)"
     echo "  -h        Esta ajuda"
     echo ""
     echo "Exemplos:"
     echo "  heapsec                    # menu"
-    echo "  heapsec Downloads/         # escaneia diretório"
+    echo "  heapsec Downloads/          # escaneia diretório"
     echo "  heapsec -m Downloads/      # monitor varredura única"
-    echo "  heapsec -l                 # ver logs"
+    echo "  heapsec -D Downloads/     # daemon background"
+    echo "  heapsec -l                # ver logs"
     exit 0
 fi
 
@@ -37,6 +39,15 @@ fi
 if [ "$1" = "-m" ]; then
     shift
     java -cp "$CP" antivirus.monitor.ProcessMonitor "$@"
+    exit 0
+fi
+
+if [ "$1" = "-D" ]; then
+    shift
+    echo "Iniciando daemon em background..."
+    nohup java -cp "$CP" antivirus.AntivirusScanner --daemon "$@" > ~/.heapsec/daemon.log 2>&1 &
+    echo "Daemon iniciado! PID: $!"
+    echo "Logs: tail -f ~/.heapsec/daemon.log"
     exit 0
 fi
 
