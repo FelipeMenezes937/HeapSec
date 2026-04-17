@@ -28,14 +28,18 @@ public class HashCache {
         try {
             if (Files.exists(Paths.get(CACHE_FILE))) {
                 Files.lines(Paths.get(CACHE_FILE)).forEach(line -> {
-                    String[] parts = line.split(":", 4);
-                    if (parts.length >= 4) {
-                        cache.put(parts[0], new CacheEntry(
-                            parts[1],
-                            Long.parseLong(parts[2]),
-                            parts[3],
-                            Long.parseLong(parts[4])
-                        ));
+                    try {
+                        String[] parts = line.split(":", 5);
+                        if (parts.length >= 4) {
+                            cache.put(parts[0], new CacheEntry(
+                                parts[1],
+                                Long.parseLong(parts[2]),
+                                parts[3],
+                                Long.parseLong(parts[4])
+                            ));
+                        }
+                    } catch (Exception e) {
+                        // skip invalid lines
                     }
                 });
             }
