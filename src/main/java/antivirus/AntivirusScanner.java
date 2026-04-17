@@ -662,16 +662,23 @@ public class AntivirusScanner {
                     }
                 }
                 case "2", "dir" -> {
-                    System.out.print("Diretorio: ");
+                    System.out.print("Diretorio [/home/felipe]: ");
                     String d = input.nextLine().trim();
-                    if (!d.isEmpty()) {
-                        try { 
-                            var r = scanner.scanDirectory(d, false, false);
-                            System.out.println("Total: " + r.size() + " arquivos");
-                            r.stream().filter(x -> !x.getScore().equals("SEGURO"))
-                                .forEach(x -> System.out.println("- " + x.getFileName() + ": " + x.getScore()));
-                        } catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
-                    }
+                    if (d.isEmpty()) d = System.getenv("HOME");
+                    else if (!d.startsWith("/")) d = System.getenv("HOME") + "/" + d;
+                    System.out.println("Escaneando: " + d);
+                    try { 
+                        var r = scanner.scanDirectory(d, false, false);
+                        System.out.println("Total: " + r.size() + " arquivos");
+                        int threats = 0;
+                        for (var x : r) {
+                            if (!x.getScore().equals("SEGURO")) {
+                                System.out.println("- " + x.getFileName() + ": " + x.getScore());
+                                threats++;
+                            }
+                        }
+                        System.out.println("Ameacas: " + threats);
+                    } catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
                 }
                 case "3", "q" -> scanner.getQuarantineManager().listQuarantined();
                 case "4", "l" -> AntivirusLogger.getInstance().getLogs().forEach(System.out::println);
