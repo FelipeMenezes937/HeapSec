@@ -211,6 +211,11 @@ public class AntivirusScanner {
                 logger.getLogs().forEach(System.out::println);
                 return;
             }
+            
+            if (args[0].equals("-w") || args[0].equals("--watch")) {
+                watchLogs();
+                return;
+            }
             boolean autoAction = args.length > 1 && args[1].equals("--action");
             boolean runSandbox = args.length > 2 && args[2].equals("--sandbox");
             ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox);
@@ -277,6 +282,33 @@ case "3":
 
                 default:
                     System.out.println("Opcao invalida");
+            }
+        }
+    }
+
+    private static void watchLogs() {
+        AntivirusLogger logger = AntivirusLogger.getInstance();
+        int lastCount = 0;
+        
+        System.out.println("\n=== WATCH LOGS (Ctrl+C para sair) ===");
+        System.out.println("Aguardando novas entradas...\n");
+        
+        while (true) {
+            try {
+                List<String> logs = logger.getLogs();
+                if (logs.size() > lastCount) {
+                    System.out.print("\033[H\033[2J");
+                    System.out.println("\n=== ANTIVIRUS LOGS (ao vivo) ===\n");
+                    for (int i = Math.max(0, logs.size() - 20); i < logs.size(); i++) {
+                        System.out.println(logs.get(i));
+                    }
+                    System.out.println("\nAguardando...");
+                    lastCount = logs.size();
+                }
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                System.out.println("\nParado.");
+                break;
             }
         }
     }

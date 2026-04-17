@@ -1,6 +1,6 @@
 #!/bin/bash
 # Antivirus wrapper script
-# Usage: antivirus [file] [--action] [--sandbox] [-l|--logs]
+# Usage: antivirus [file] [--action] [--sandbox] [-l|--logs] [-w|--watch]
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CP="$SCRIPT_DIR/out/production/antivirus"
