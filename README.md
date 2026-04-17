@@ -1,6 +1,7 @@
-# InfoVirus Antivirus
+# ByteForge Antivirus
 
 Scanner antivírus heurístico 100% local em Java 21.
+> Forja de bytes - análise profunda e eficiente
 
 ## Arquitetura
 
