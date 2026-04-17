@@ -2,8 +2,7 @@ package antivirus.scanner;
 
 public class EntropyAnalyzer {
 
-    private static final int SAMPLE_SIZE = 512 * 1024;
-    private static final int CHUNK_SIZE = 64 * 1024;
+    private static final int SAMPLE_SIZE = 256 * 1024;
 
     public double calculateEntropy(byte[] data) {
         int len = data.length;
@@ -33,5 +32,21 @@ public class EntropyAnalyzer {
             }
         }
         return entropy;
+    }
+
+    public boolean isCompressed(byte[] data) {
+        if (data.length < 4) return false;
+        int magic = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+        return magic == 0x504b0304 || magic == 0x504b0506 ||
+               magic == 0x377a1850 || magic == 0x425a68 ||
+               (data[0] == 0x1f && data[1] == (byte)0x8b);
+    }
+
+    public boolean isLikelyLegitimate(byte[] data, double entropy) {
+        if (data.length > 50 * 1024 * 1024) return true;
+        if (isCompressed(data)) return true;
+        int zipHeader = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+        if (zipHeader == 0x504b0304 || zipHeader == 0x504b0506) return true;
+        return false;
     }
 }
