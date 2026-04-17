@@ -94,7 +94,23 @@ public class AntivirusScanner {
             );
         }
 
-        long fileSize = Files.size(path);
+        long fileSize;
+        try {
+            fileSize = Files.size(path);
+        } catch (Exception e) {
+            return new ScanResult(
+                path.getFileName().toString(),
+                0,
+                0,
+                List.of(),
+                false,
+                false,
+                "SEGURO",
+                List.of("Erro ao ler: " + e.getMessage()),
+                false,
+                false
+            );
+        }
 
         if (fileSize > MAX_FILE_SIZE) {
             return new ScanResult(
