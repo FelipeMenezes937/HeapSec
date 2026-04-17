@@ -603,7 +603,9 @@ public class AntivirusScanner {
                 key.reset();
             }
         } catch (Exception e) {
-            System.err.println("Daemon parado: " + e.getMessage());
+            if (!e.getMessage().equals("Interrupted")) {
+                System.err.println("Daemon parado: " + e.getMessage());
+            }
         }
     }
 
@@ -684,9 +686,12 @@ public class AntivirusScanner {
                 case "4", "l" -> AntivirusLogger.getInstance().getLogs().forEach(System.out::println);
                 case "5", "w" -> watchLogs();
                 case "6", "d" -> {
-                    System.out.print("Path: ");
+                    System.out.print("Path [/home/felipe]: ");
                     String p = input.nextLine().trim();
-                    if (!p.isEmpty()) startDaemon(scanner, p, false);
+                    if (p.isEmpty()) p = System.getenv("HOME");
+                    else if (!p.startsWith("/")) p = System.getenv("HOME") + "/" + p;
+                    System.out.println("Iniciando daemon: " + p);
+                    startDaemon(scanner, p, false);
                 }
                 case "7", "h" -> System.out.println("Uso: ./heapsec <arq> | ./heapsec -d <arq> | ./heapsec -l | ./heapsec -w");
                 case "8", "quit" -> { return; }
