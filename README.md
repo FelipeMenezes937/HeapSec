@@ -9,7 +9,8 @@ Scanner antivírus heurístico 100% local em Java 21.
 - **Verificação de Extensão Dupla** - Arquivos disfarçados (.pdf.exe, .doc.exe)
 - **Análise de Headers PE** - Seções perigosas (Write+Execute), packers (.upx, .aspack)
 - **Quarentena** - Move arquivos suspeitos para ~/.antivirus/quarantine
-- **Kill de Processos** - Encerra processos maliciosos automaticamente
+- **Execução em Sandbox** - Executa arquivos em ambiente isolado (firejail/gvisor/docker)
+- **Logging Centralizado** - Logs de todas as operações em ~/.antivirus/logs
 
 ## Técnicas de Detecção
 
@@ -42,6 +43,10 @@ src/main/java/antivirus/
 │   └── QuarantineManager.java # Quarentena
 ├── monitor/
 │   └── ProcessMonitor.java   # Monitor contínuo
+├── sandbox/
+│   └── SandboxExecutor.java # Execução em sandbox
+├── logging/
+│   └── AntivirusLogger.java # Logging centralizado
 └── scanner/
     ├── EntropyAnalyzer.java  # Entropia de Shannon
     ├── ExtensionChecker.java # Extensões duplas
@@ -56,7 +61,7 @@ src/main/java/antivirus/
 javac -d out/production/antivirus src/main/java/antivirus/**/*.java src/main/java/antivirus/*.java
 ```
 
-## Usage
+## Uso
 
 ### Scanner de arquivo
 
@@ -70,10 +75,16 @@ java -cp out/production/antivirus antivirus.AntivirusScanner arquivo.exe
 java -cp out/production/antivirus antivirus.AntivirusScanner arquivo.exe --action
 ```
 
+### Scanner com execução em sandbox
+
+```bash
+java -cp out/production/antivirus antivirus.AntivirusScanner arquivo.exe --action --sandbox
+```
+
 ### Escaneamento recursivo de diretório
 
 ```bash
-java -cp out/production/antivirus antivirus.AntivirusScanner /caminho/pasta --recursive
+java -cp out/production/antivirus antivirus.AntivirusScanner /caminho/pasta --action --sandbox
 ```
 
 ### Monitor de processos (contínuo)
@@ -84,10 +95,40 @@ java -cp out/production/antivirus antivirus.monitor.ProcessMonitor 10
 
 Intervalo em segundos (padrão: 10).
 
+## Sandbox
+
+O antivirus detecta automaticamente o sandbox disponível:
+
+| Prioridade | Sandbox | Restrições |
+|------------|---------|------------|
+| 1º | firejail | --private --net=none |
+| 2º | gvisor (runsc) | --fs=readonly --net=none |
+| 3º | docker | --network=none --read-only |
+| 4º | native | nenhum isolamento |
+
+## Logging
+
+Logs保存在 `~/.antivirus/logs/`:
+
+- `antivirus.log` - Log principal de todas operações
+- `quarantine.log` - Log de quarentena
+- `activity_<sessao>.log` - Log de execução em sandbox
+
+### Filtrar logs
+
+```java
+// Por nível
+AntivirusLogger.getInstance().getLogsByLevel(Level.ERROR);
+
+// Por categoria
+AntivirusLogger.getInstance().getLogsByCategory(Category.SCANNER);
+```
+
 ## Limitações
 
 - Não detecta malware polimórfico avançado
 - Falsos positivos em arquivos legítimos comprimidos
+- Sandbox requer ferramentas externas instaladas
 - Útil como camada adicional de detecção, não substitui antivírus tradicional
 
 ## Referências
@@ -95,3 +136,5 @@ Intervalo em segundos (padrão: 10).
 - [Shannon Entropy](https://en.wikipedia.org/wiki/Entropy_(information_theory))
 - [PE Format](https://docs.microsoft.com/en-us/windows/win32/debug/pe-format)
 - [UPX Packer](https://upx.github.io/)
+- [firejail](https://firejail.rootkit.nl/)
+- [gvisor](https://gvisor.dev/)
