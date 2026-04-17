@@ -202,9 +202,15 @@ public class AntivirusScanner {
 
     public static void main(String[] args) throws IOException {
         AntivirusScanner scanner = new AntivirusScanner();
+        AntivirusLogger logger = AntivirusLogger.getInstance();
         Scanner input = new Scanner(System.in);
         
         if (args.length > 0) {
+            if (args[0].equals("-l") || args[0].equals("--logs")) {
+                System.out.println("\n=== LOGS DO ANTIVIRUS ===");
+                logger.getLogs().forEach(System.out::println);
+                return;
+            }
             boolean autoAction = args.length > 1 && args[1].equals("--action");
             boolean runSandbox = args.length > 2 && args[2].equals("--sandbox");
             ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox);
