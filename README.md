@@ -11,6 +11,8 @@ Scanner antivírus heurístico 100% local em Java 21.
 - **Quarentena** - Move arquivos suspeitos para ~/.antivirus/quarantine
 - **Execução em Sandbox** - Executa arquivos em ambiente isolado (firejail/gvisor/docker)
 - **Logging Centralizado** - Logs de todas as operações em ~/.antivirus/logs
+- **Categorização de Malware** - Detecta tipos (password stealer, ransomware, rat, etc)
+- **Watch Mode** - Logs em tempo real (como htop)
 
 ## Técnicas de Detecção
 
@@ -22,6 +24,20 @@ Scanner antivírus heurístico 100% local em Java 21.
 | Extensão dupla | .pdf.exe etc | +50 |
 | Seções de packer | .upx, .aspack | +30 |
 | Write + Execute | Seção PE perigosa | +40 |
+
+### Categorias de Malware
+
+| Categoria | Padrões | Score Extra |
+|-----------|--------|-----------|
+| RANSOMWARE | encrypt, bitcoin, locked files | +80 |
+| RAT | backdoor, remote admin, njrat | +70 |
+| PASSWORD_STEALER | password, logins, firefox | +60 |
+| BANKER | bank, transfer, creditcard | +60 |
+| CRYPTOMINER | miner, hash, pool | +50 |
+| KEYLOGGER | keylog, hook, keystroke | +50 |
+| BOTNET | botnet, ddos, zombie | +50 |
+| SPYWARE | screenshot, webcam, monitor | +45 |
+| DROPPER | download, payload, mshta | +40 |
 
 ## Score de Ameaça
 
@@ -51,8 +67,9 @@ src/main/java/antivirus/
     ├── EntropyAnalyzer.java  # Entropia de Shannon
     ├── ExtensionChecker.java # Extensões duplas
     ├── PEAnalyzer.java       # Headers PE
+    ├── PEAnalysis.java       # Resultado de análise PE
     ├── ScanResult.java       # Modelo de resultado
-    └── StringDetector.java   # Strings suspeitas
+    └── StringDetector.java   # Strings suspeitas + categorias
 ```
 
 ## Compilação
@@ -63,31 +80,31 @@ javac -d out/production/antivirus src/main/java/antivirus/**/*.java src/main/jav
 
 ## Uso
 
-### Scanner de arquivo
+###CLI (wrapper)
 
 ```bash
-java -cp out/production/antivirus antivirus.AntivirusScanner arquivo.exe
+./antivirus arquivo.exe                    # Escanear arquivo
+./antivirus arquivo.exe --action          # Escanear + quarentena
+./antivirus arquivo.exe --action --sandbox  # Escanear + quarentena + sandbox
+./antivirus -l                         # Ver logs
+./antivirus --logs                    # Ver logs
+./antivirus -w                         # Watch logs tempo real (Ctrl+C)
+./antivirus --watch                   # Watch logs tempo real
 ```
 
-### Scanner com ação automática (quarentena + kill)
+###Modo interativo
 
 ```bash
-java -cp out/production/antivirus antivirus.AntivirusScanner arquivo.exe --action
+./antivirus
+# Menu:
+# 1. Escanear arquivo
+# 2. Escanear diretorio
+# 3. Ver quarentena
+# 4. Ver logs
+# 5. Sair
 ```
 
-### Scanner com execução em sandbox
-
-```bash
-java -cp out/production/antivirus antivirus.AntivirusScanner arquivo.exe --action --sandbox
-```
-
-### Escaneamento recursivo de diretório
-
-```bash
-java -cp out/production/antivirus antivirus.AntivirusScanner /caminho/pasta --action --sandbox
-```
-
-### Monitor de processos (contínuo)
+###Monitor de processos (contínuo)
 
 ```bash
 java -cp out/production/antivirus antivirus.monitor.ProcessMonitor 10
@@ -101,35 +118,26 @@ O antivirus detecta automaticamente o sandbox disponível:
 
 | Prioridade | Sandbox | Restrições |
 |------------|---------|------------|
-| 1º | firejail | --private --net=none |
+| 1º | firejail | --private --private-tmp --net=none --caps.drop=all |
 | 2º | gvisor (runsc) | --fs=readonly --net=none |
-| 3º | docker | --network=none --read-only |
-| 4º | native | nenhum isolamento |
+| 3º | docker | --network=none --read-only --cap-drop=ALL |
+| 4º | unshare | --mount --pid --fork |
+| 5º | native | nenhum isolamento |
 
 ## Logging
 
 Logs保存在 `~/.antivirus/logs/`:
 
-- `antivirus.log` - Log principal de todas operações
-- `quarantine.log` - Log de quarentena
-- `activity_<sessao>.log` - Log de execução em sandbox
-
-### Filtrar logs
-
-```java
-// Por nível
-AntivirusLogger.getInstance().getLogsByLevel(Level.ERROR);
-
-// Por categoria
-AntivirusLogger.getInstance().getLogsByCategory(Category.SCANNER);
+```bash
+./antivirus -w  # Modo watch (tempo real)
+./antivirus -l  # Ver todos os logs
 ```
 
-## Limitações
+## Testado com Malware Real
 
-- Não detecta malware polimórfico avançado
-- Falsos positivos em arquivos legítimos comprimidos
-- Sandbox requer ferramentas externas instaladas
-- Útil como camada adicional de detecção, não substitui antivírus tradicional
+- **passwordfox.exe** - Detectado como PASSWORD_STEALER
+- Score: 130 (CRITICO)
+- Quarentena automática ativada
 
 ## Referências
 
