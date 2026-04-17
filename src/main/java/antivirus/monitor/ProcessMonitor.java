@@ -156,6 +156,11 @@ public class ProcessMonitor {
     }
 
     public static void main(String[] args) {
+        if (args.length > 0 && (args[0].equals("-h") || args[0].equals("--help"))) {
+            printHelp();
+            return;
+        }
+
         int interval = 10;
         boolean decompress = false;
         boolean autoQuar = false;
@@ -178,14 +183,7 @@ public class ProcessMonitor {
             }
         }
 
-        System.out.println("""
-            HeapSec Monitor
-            ===============
-            -t <seg>    Intervalo (padrao: 10)
-            -d          Extrair e analisar ZIPs
-            -q          Quarentena automatica
-            <path>     Escaneia diretorio (modo unico)
-            """);
+        printHeader();
 
         ProcessMonitor monitor = new ProcessMonitor(interval, decompress, autoQuar, path);
         monitor.start();
@@ -195,6 +193,51 @@ public class ProcessMonitor {
             try { System.in.read(); } catch (Exception e) { }
             monitor.stop();
         }
+    }
+
+    private static void printHelp() {
+        System.out.println("""
+            HeapSec Monitor - Ajuda
+            ======================
+
+            USO:
+                java -cp out antivirus.monitor.ProcessMonitor [opcoes]
+
+            OPCOES:
+                -h, --help           Esta ajuda
+                -d, --decompress    Extrair e analisar ZIPs/JARs
+                -q, --quarantine   Quarentena automatica
+                -t <seg>            Intervalo em segundos (padrao: 10)
+                <path>              Escaneia diretorio (modo unico, sem loop)
+
+            EXEMPLOS:
+                # Monitor processos a cada 10s
+                java -cp out antivirus.monitor.ProcessMonitor
+
+                # Varredura unica em diretorio com extração ZIP
+                java -cp out antivirus.monitor.ProcessMonitor -d /home/felipe/Downloads
+
+                # Monitor com auto-quarentena
+                java -cp out antivirus.monitor.ProcessMonitor -q -t 5
+
+            NOTAS:
+                - Sem argumentos = modo processos (loop continuo)
+                - Com <path> = modo unico (uma varredura)
+                - -d analisa conteudo de arquivos ZIP/JAR
+                """);
+    }
+
+    private static void printHeader() {
+        System.out.println("""
+            HeapSec Monitor
+            ===============
+            -t <seg>    Intervalo (padrao: 10)
+            -d          Extrair e analisar ZIPs
+            -q          Quarentena automatica
+            <path>     Escaneia diretorio (modo unico)
+            <nada>     Monitor processos (loop)
+            -h         Ajuda
+            """);
     }
 
     private static class ProcessInfo {
