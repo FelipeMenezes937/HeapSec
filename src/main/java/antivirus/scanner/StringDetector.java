@@ -6,28 +6,28 @@ import java.util.List;
 public class StringDetector {
 
     private static final String[] SUSPICIOUS_PATTERNS = {
-        "http://",
-        "cmd.exe",
-        "powershell",
-        "wscript",
-        "cscript",
-        "certutil",
-        "bitsadmin",
-        "whoami",
-        "net user",
-        "reg add",
-        "vssadmin",
+        "cmd.exe /c",
+        "powershell -nop",
+        "wscript ",
+        "cscript ",
+        "certutil -decode",
+        "bitsadmin /transfer",
+        "whoami /all",
+        "reg add HKLM",
+        "vssadmin delete",
         "mimikatz",
-        "Base64",
         "encodedcommand",
         "downloadstring",
         "invoke-webrequest",
-        "new-object net.webclient",
-        "IEX new-object",
+        "iex ",
+        "invoke-expression",
         "eval(",
         "exec(",
         "system(",
-        "passthru"
+        "passthru",
+        "CreateObject",
+        "WScript.Shell",
+        "ShellExecute"
     };
 
     private static final String[] PASSWORD_STEALER_PATTERNS = {
@@ -163,41 +163,62 @@ public class StringDetector {
 
     private static final String[] RANSOMWARE_PATTERNS = {
         "ransom",
-        "encrypt",
         "encrypted",
         "your files",
         "decrypt",
-        "bitcoin",
-        "btc",
         "payment",
         "wallet",
-        "locked",
         "locked files",
-        "restore"
+        "restore files",
+        "all files encrypted",
+        "unlock"
     };
+
+    private static final int MAX_STRING_LEN = 256;
+    private static final int MIN_STRING_LEN = 4;
+    private static final int SEARCH_LIMIT = 2 * 1024 * 1024;
 
     public List<String> detect(byte[] data) {
         List<String> found = new ArrayList<>();
-        String content = new String(data);
-        
+        int limit = Math.min(data.length, SEARCH_LIMIT);
+
         for (String pattern : SUSPICIOUS_PATTERNS) {
-            if (content.toLowerCase().contains(pattern.toLowerCase())) {
+            byte[] patternBytes = pattern.getBytes();
+            if (searchBytes(data, 0, limit, patternBytes)) {
                 found.add(pattern);
+                if (found.size() >= 10) break;
             }
         }
-        
         return found;
     }
 
     public List<String> detectPasswordStealer(byte[] data) {
         List<String> found = new ArrayList<>();
-        String content = new String(data);
+        int limit = Math.min(data.length, SEARCH_LIMIT);
+
         for (String pattern : PASSWORD_STEALER_PATTERNS) {
-            if (content.toLowerCase().contains(pattern.toLowerCase())) {
+            byte[] patternBytes = pattern.getBytes();
+            if (searchBytes(data, 0, limit, patternBytes)) {
                 found.add(pattern);
+                if (found.size() >= 10) break;
             }
         }
         return found;
+    }
+
+    private boolean searchBytes(byte[] data, int start, int end, byte[] pattern) {
+        outer:
+        for (int i = start; i < end - pattern.length; i++) {
+            for (int j = 0; j < pattern.length; j++) {
+                byte b = data[i + j];
+                byte p = pattern[j];
+                if (b >= 'A' && b <= 'Z') b = (byte) (b + 32);
+                if (p >= 'A' && p <= 'Z') p = (byte) (p + 32);
+                if (b != p) continue outer;
+            }
+            return true;
+        }
+        return false;
     }
 
     public int countPasswordStealerPatterns(byte[] data) {
@@ -205,8 +226,7 @@ public class StringDetector {
     }
 
     public MalwareCategory detectCategory(byte[] data) {
-        String content = new String(data).toLowerCase();
-        int psCount = countPasswordStealerPatterns(data);
+        int psCount = countPatterns(data, PASSWORD_STEALER_PATTERNS);
         int klCount = countPatterns(data, KEYLOGGER_PATTERNS);
         int bankCount = countPatterns(data, BANKER_PATTERNS);
         int ratCount = countPatterns(data, RAT_PATTERNS);
@@ -216,27 +236,26 @@ public class StringDetector {
         int botCount = countPatterns(data, BOTNET_PATTERNS);
         int ranCount = countPatterns(data, RANSOMWARE_PATTERNS);
 
-        if (psCount >= 3) return MalwareCategory.PASSWORD_STEALER;
-        if (ratCount >= 3) return MalwareCategory.RAT;
-        if (ranCount >= 3) return MalwareCategory.RANSOMWARE;
-        if (mineCount >= 3) return MalwareCategory.CRYPTOMINER;
-        if (bankCount >= 3) return MalwareCategory.BANKER;
-        if (klCount >= 3) return MalwareCategory.KEYLOGGER;
-        if (dropCount >= 3) return MalwareCategory.DROPPER;
-        if (spyCount >= 3) return MalwareCategory.SPYWARE;
-        if (botCount >= 3) return MalwareCategory.BOTNET;
-        if (psCount > 0 || ratCount > 0 || ranCount > 0 || mineCount > 0) {
-            return MalwareCategory.SUSPICIOUS;
-        }
+        if (psCount >= 5) return MalwareCategory.PASSWORD_STEALER;
+        if (ratCount >= 5) return MalwareCategory.RAT;
+        if (ranCount >= 5) return MalwareCategory.RANSOMWARE;
+        if (mineCount >= 5) return MalwareCategory.CRYPTOMINER;
+        if (bankCount >= 6) return MalwareCategory.BANKER;
+        if (klCount >= 5) return MalwareCategory.KEYLOGGER;
+        if (dropCount >= 5) return MalwareCategory.DROPPER;
+        if (spyCount >= 5) return MalwareCategory.SPYWARE;
+        if (botCount >= 5) return MalwareCategory.BOTNET;
         return MalwareCategory.UNKNOWN;
     }
 
     private int countPatterns(byte[] data, String[] patterns) {
-        String content = new String(data).toLowerCase();
+        int limit = Math.min(data.length, SEARCH_LIMIT);
         int count = 0;
         for (String pattern : patterns) {
-            if (content.contains(pattern.toLowerCase())) {
+            byte[] patternBytes = pattern.getBytes();
+            if (searchBytes(data, 0, limit, patternBytes)) {
                 count++;
+                if (count >= 5) break;
             }
         }
         return count;
@@ -245,16 +264,15 @@ public class StringDetector {
     public int getCategoryScore(byte[] data) {
         MalwareCategory cat = detectCategory(data);
         switch (cat) {
-            case PASSWORD_STEALER: return 60;
-            case RANSOMWARE: return 80;
-            case RAT: return 70;
-            case BANKER: return 60;
-            case CRYPTOMINER: return 50;
-            case KEYLOGGER: return 50;
-            case BOTNET: return 50;
-            case SPYWARE: return 45;
-            case DROPPER: return 40;
-            case SUSPICIOUS: return 30;
+            case PASSWORD_STEALER: return 50;
+            case RANSOMWARE: return 70;
+            case RAT: return 60;
+            case BANKER: return 40;
+            case CRYPTOMINER: return 40;
+            case KEYLOGGER: return 40;
+            case BOTNET: return 40;
+            case SPYWARE: return 35;
+            case DROPPER: return 30;
             default: return 0;
         }
     }

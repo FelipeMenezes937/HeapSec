@@ -3,9 +3,14 @@ package antivirus;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.ForkJoinPool;
 
 import antivirus.action.ProcessKiller;
 import antivirus.action.QuarantineManager;
@@ -63,8 +68,27 @@ public class AntivirusScanner {
         return scanFile(filePath, autoAction, false);
     }
 
+    private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
+
     public ScanResult scanFile(String filePath, boolean autoAction, boolean runSandbox) throws IOException {
         Path path = Path.of(filePath);
+        long fileSize = Files.size(path);
+
+        if (fileSize > MAX_FILE_SIZE) {
+            return new ScanResult(
+                path.getFileName().toString(),
+                fileSize,
+                0,
+                List.of(),
+                false,
+                false,
+                "SEGURO",
+                List.of("Arquivo muito grande (" + (fileSize / 1024 / 1024) + "MB) - ignorado"),
+                false,
+                false
+            );
+        }
+
         byte[] fileData = Files.readAllBytes(path);
         String fileName = path.getFileName().toString();
 
@@ -105,7 +129,7 @@ public class AntivirusScanner {
             sandboxExecuted = true;
         }
 
-        if (autoAction && score >= 10) {
+        if (autoAction && score >= 30) {
             quarantined = quarantineManager.quarantine(filePath);
             if (quarantined) {
                 threats.add("Arquivo movido para quarentena");
@@ -139,41 +163,40 @@ public class AntivirusScanner {
 
     private int calculateThreatScore(double entropy, int suspiciousCount, boolean doubleExt, PEAnalysis peAnalysis, int passwordStealerCount) {
         int score = 0;
-        if (entropy > 7.5) score += 40;
-        else if (entropy > 6.0) score += 20;
+        if (entropy > 7.8) score += 40;
+        else if (entropy > 7.2) score += 15;
         if (suspiciousCount > 3) score += 30;
-        else if (suspiciousCount > 0) score += 10;
-        if (doubleExt) score += 50;
-        if (peAnalysis.hasPackerSections()) score += 30;
-        if (peAnalysis.hasWriteAndExecute()) score += 40;
-        
-        if (passwordStealerCount >= 5) score += 50;
-        else if (passwordStealerCount >= 3) score += 30;
-        else if (passwordStealerCount > 0) score += 20;
-        
+        else if (suspiciousCount > 5) score += 10;
+        if (doubleExt) score += 40;
+        if (peAnalysis.hasPackerSections()) score += 25;
+        if (peAnalysis.hasWriteAndExecute()) score += 35;
+
+        if (passwordStealerCount >= 5) score += 40;
+        else if (passwordStealerCount >= 3) score += 20;
+
         return score;
     }
 
     private String getThreatLevel(int score) {
-        if (score >= 80) return "CRITICO";
-        if (score >= 50) return "ALTO";
-        if (score >= 30) return "MEDIO";
-        if (score >= 10) return "BAIXO";
+        if (score >= 100) return "CRITICO";
+        if (score >= 70) return "ALTO";
+        if (score >= 45) return "MEDIO";
+        if (score >= 25) return "BAIXO";
         return "SEGURO";
     }
 
     private List<String> buildThreats(double entropy, List<String> suspicious, boolean doubleExt, PEAnalysis pe, List<String> passwordStealer, StringDetector.MalwareCategory category) {
         List<String> threats = new ArrayList<>();
-        if (entropy > 7.5) threats.add(String.format("Alta entropia (%.2f)", entropy));
-        else if (entropy > 6.0) threats.add(String.format("Entropia moderada (%.2f)", entropy));
-        if (!suspicious.isEmpty()) threats.add("Strings suspeitas: " + String.join(", ", suspicious));
+        if (entropy > 7.8) threats.add(String.format("Alta entropia (%.2f)", entropy));
+        else if (entropy > 7.2) threats.add(String.format("Entropia elevada (%.2f)", entropy));
+        if (suspicious.size() > 3) threats.add("Strings suspeitas: " + String.join(", ", suspicious));
         if (doubleExt) threats.add("Extensao dupla");
         if (pe.hasPackerSections()) threats.add("Secoes de packer detectadas");
         if (pe.hasWriteAndExecute()) threats.add("Secao com Write+Execute");
-        if (!passwordStealer.isEmpty()) {
+        if (passwordStealer.size() >= 3) {
             threats.add("Password stealer: " + String.join(", ", passwordStealer));
         }
-        if (category != StringDetector.MalwareCategory.UNKNOWN) {
+        if (category != StringDetector.MalwareCategory.UNKNOWN && category != StringDetector.MalwareCategory.SUSPICIOUS) {
             threats.add("Categoria: " + category);
         }
         return threats;
@@ -183,21 +206,95 @@ public class AntivirusScanner {
         return scanDirectory(dirPath, autoAction, false);
     }
 
+    private static final String[] SKIP_DIRS = {"/proc", "/sys", "/dev", "/run", "/tmp", ".cache", "node_modules", ".npm", ".gradle", "vendor", "bin/lib", "modules", ".local", "wokwi"};
+    private static final String[] SKIP_EXT = {".pak", ".dat", ".idx", ".db", ".sqlite", ".map", ".bin", ".elf"};
+    private static final int PARALLEL_THREADS = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
+
+    private static final int BATCH_SIZE = 500;
+
     public List<ScanResult> scanDirectory(String dirPath, boolean autoAction, boolean runSandbox) throws IOException {
         List<ScanResult> results = new ArrayList<>();
-        Files.walk(Path.of(dirPath))
-            .filter(p -> p.toFile().isFile())
-            .forEach(p -> {
+        Path basePath = Path.of(dirPath).toAbsolutePath().normalize();
+
+        System.out.println("Escaneando " + dirPath + " em lotes de " + BATCH_SIZE + "...");
+        System.out.println("(Ctrl+C para parar)");
+
+        int processed = 0;
+        int batchNum = 0;
+
+        try {
+            java.util.Iterator<Path> it = Files.walk(basePath)
+                .filter(p -> p.toFile().isFile())
+                .filter(p -> !shouldSkip(p))
+                .iterator();
+
+            List<Path> batch = new ArrayList<>(BATCH_SIZE);
+
+            while (it.hasNext()) {
+                batch.add(it.next());
+
+                if (batch.size() >= BATCH_SIZE || !it.hasNext()) {
+                    List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
+                    results.addAll(batchResults);
+
+                    processed += batch.size();
+                    batchNum++;
+
+                    long usedMB = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+                    usedMB /= 1024 * 1024;
+                    System.out.println("[" + batchNum + "] " + processed + " arquivos | Mem: " + usedMB + "MB | Ameacas: " + results.size());
+
+                    batch.clear();
+                    System.gc();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Escaneamento interrompido: " + e.getMessage());
+        }
+
+        System.out.println("Escaneamento concluido. " + results.size() + " amenazas encontradas.");
+        return results;
+    }
+
+    private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean runSandbox) {
+        List<ScanResult> batchResults = new ArrayList<>();
+        ForkJoinPool pool = new ForkJoinPool(PARALLEL_THREADS);
+        try {
+            pool.submit(() -> files.parallelStream().forEach(p -> {
                 try {
                     ScanResult r = scanFile(p.toString(), autoAction, runSandbox);
                     if (!r.getScore().equals("SEGURO")) {
-                        results.add(r);
+                        synchronized (batchResults) {
+                            batchResults.add(r);
+                        }
                     }
                 } catch (Exception e) {
-                    System.err.println("Erro ao escanear " + p + ": " + e.getMessage());
+                    // silent
                 }
-            });
-        return results;
+            })).get();
+        } catch (Exception e) {
+            // silent
+        } finally {
+            pool.shutdown();
+        }
+        return batchResults;
+    }
+
+    private boolean shouldSkip(Path path) {
+        String pathStr = path.toString();
+        String lower = pathStr.toLowerCase();
+        for (String skip : SKIP_DIRS) {
+            if (lower.contains(skip.toLowerCase())) {
+                return true;
+            }
+        }
+        String fileName = path.getFileName().toString().toLowerCase();
+        for (String ext : SKIP_EXT) {
+            if (fileName.endsWith(ext)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void main(String[] args) throws IOException {
@@ -206,6 +303,15 @@ public class AntivirusScanner {
         Scanner input = new Scanner(System.in);
         
         if (args.length > 0) {
+            if (args[0].equals("--daemon")) {
+                String watchPath = args.length > 1 ? args[1] : System.getenv("HOME");
+                boolean autoQuar = args.length > 2 && args[2].equals("--action");
+                System.out.println("Daemon mode: " + watchPath);
+                AntivirusScanner sc = new AntivirusScanner();
+                startDaemon(sc, watchPath, autoQuar);
+                return;
+            }
+
             if (args[0].equals("-l") || args[0].equals("--logs")) {
                 System.out.println("\n=== LOGS DO ANTIVIRUS ===");
                 logger.getLogs().forEach(System.out::println);
@@ -218,71 +324,163 @@ public class AntivirusScanner {
             }
             boolean autoAction = args.length > 1 && args[1].equals("--action");
             boolean runSandbox = args.length > 2 && args[2].equals("--sandbox");
-            ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox);
-            System.out.println(result);
+            Path path = Path.of(args[0]);
+
+            if (Files.isDirectory(path)) {
+                List<ScanResult> results = scanner.scanDirectory(args[0], autoAction, runSandbox);
+                System.out.println("\n=== RESULTADO DO ESCANEAMENTO ===");
+                System.out.println("Total de amenazas: " + results.size());
+                for (ScanResult r : results) {
+                    System.out.println(r);
+                    System.out.println("---");
+                }
+            } else {
+                ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox);
+                System.out.println(result);
+            }
             return;
         }
         
         while (true) {
-            System.out.println("\n=== ANTIVIRUS LOCAL ===");
-            System.out.println("1. Escanear arquivo");
-            System.out.println("2. Escanear diretorio");
-            System.out.println("3. Ver quarentena");
-            System.out.println("4. Ver logs");
-            System.out.println("5. Sair");
+            System.out.println("""
+
+                === ANTIVIRUS LOCAL ===
+                1. Escanear arquivo
+                2. Escanear diretorio
+                3. Ver quarentena
+                4. Ver logs
+                5. Watch logs (tempo real)
+                6. Modo daemon (monitoramento)
+                7. Ajuda
+                8. Sair
+                """);
             System.out.print("> ");
-            
+
             String choice = input.nextLine().trim();
-            
+
             switch (choice) {
-                case "1":
+                case "1", "arquivo", "file" -> {
                     System.out.print("Caminho do arquivo: ");
                     String filePath = input.nextLine().trim();
-                    System.out.print("Acao automatica? (s/n): ");
+                    if (filePath.isEmpty()) break;
+                    System.out.print("Quarentena automatica? (s/N): ");
                     boolean auto = input.nextLine().trim().equalsIgnoreCase("s");
-                    System.out.print("Executar em sandbox? (s/n): ");
-                    boolean sandbox = input.nextLine().trim().equalsIgnoreCase("s");
                     try {
-                        System.out.println(scanner.scanFile(filePath, auto, sandbox));
+                        System.out.println(scanner.scanFile(filePath, auto, false));
                     } catch (Exception e) {
                         System.out.println("Erro: " + e.getMessage());
                     }
-                    break;
-                    
-                case "2":
-                    System.out.print("Caminho do diretorio: ");
+                }
+
+                case "2", "diretorio", "dir" -> {
+                    System.out.print("Caminho do diretorio [Enter=/home/felipe]: ");
                     String dirPath = input.nextLine().trim();
-                    System.out.print("Acao automatica? (s/n): ");
-                    boolean autoDir = input.nextLine().trim().equalsIgnoreCase("s");
-                    System.out.print("Executar em sandbox? (s/n): ");
-                    boolean sandboxDir = input.nextLine().trim().equalsIgnoreCase("s");
+                    if (dirPath.isEmpty()) dirPath = System.getenv("HOME");
+                    System.out.print("Quarentena automatica? (s/N): ");
+                    boolean auto = input.nextLine().trim().equalsIgnoreCase("s");
+                    System.out.println("[Enter] para iniciar...");
+                    input.nextLine();
                     try {
-                        List<ScanResult> results = scanner.scanDirectory(dirPath, autoDir, sandboxDir);
-                        for (ScanResult r : results) {
-                            System.out.println(r);
-                        }
+                        List<ScanResult> results = scanner.scanDirectory(dirPath, auto, false);
+                        System.out.println("\n===RESULTADO===");
+                        System.out.println("Totais: " + results.size());
+                        results.forEach(r -> System.out.println("- " + r.getFileName() + ": " + r.getScore()));
                     } catch (Exception e) {
                         System.out.println("Erro: " + e.getMessage());
                     }
-                    break;
-                    
-case "3":
-                    scanner.getQuarantineManager().listQuarantined();
-                    break;
+                }
 
-                case "4":
-                    System.out.println("\n=== LOGS ===");
-                    AntivirusLogger.getInstance().getLogs().forEach(System.out::println);
-                    break;
+                case "3", "quarentena" -> scanner.getQuarantineManager().listQuarantined();
 
-                case "5":
+                case "4", "logs", "l" -> {
+                    System.out.println("\n=== ULTIMOS LOGS ===");
+                    var logs = AntivirusLogger.getInstance().getLogs();
+                    logs.stream().skip(Math.max(0, logs.size() - 20)).forEach(System.out::println);
+                }
+
+                case "5", "watch", "w" -> watchLogs();
+
+                case "6", "daemon", "d" -> {
+                    System.out.print("Diretorio para monitorar [Enter=/home/felipe]: ");
+                    String watchPath = input.nextLine().trim();
+                    if (watchPath.isEmpty()) watchPath = System.getenv("HOME");
+                    System.out.print("Quarentena automatica? (s/N): ");
+                    boolean auto = input.nextLine().trim().equalsIgnoreCase("s");
+                    System.out.println("Iniciando daemon...");
+                    System.out.println("Monitorando: " + watchPath);
+                    System.out.println("Pressione Ctrl+C para parar");
+                    startDaemon(scanner, watchPath, auto);
+                }
+
+                case "7", "ajuda", "help", "h" -> System.out.println("""
+                    USO:
+                      antivirus arquivo.exe         - escanear arquivo
+                      antivirus /pasta           - escanear diretorio
+                      antivirus arquivo.exe --action - escanear + quarentenar
+                      antivirus -l                 - ver logs
+                      antivirus -w                 - watch logs
+
+                    MENU:
+                      1 - scan arquivo
+                      2 - scan diretorio (lote)
+                      3 - ver quarentena
+                      4 - ver ultimos 20 logs
+                      5 - watch logs tempo real
+                      6 - modo daemon (monitoramento)
+                      8 - sair
+                    """);
+
+                case "8", "sair", "exit", "quit" -> {
                     AntivirusLogger.getInstance().info(AntivirusLogger.Category.SYSTEM, "Antivirus encerrado");
                     System.out.println("Saindo...");
                     return;
+                }
 
-                default:
-                    System.out.println("Opcao invalida");
+                default -> System.out.println("Opcao invalida. Digite 7 para ajuda.");
             }
+        }
+    }
+
+    private static void startDaemon(AntivirusScanner scanner, String watchPath, boolean autoQuarantine) {
+        AntivirusLogger logger = AntivirusLogger.getInstance();
+        logger.info(AntivirusLogger.Category.SYSTEM, "Daemon iniciado em: " + watchPath);
+
+        try (java.nio.file.WatchService watchService = java.nio.file.FileSystems.getDefault().newWatchService()) {
+            Path path = Path.of(watchPath);
+            path.register(watchService,
+                java.nio.file.StandardWatchEventKinds.ENTRY_CREATE,
+                java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY);
+
+            System.out.println("Daemon ativo! Monitorando alteracoes...");
+
+            while (true) {
+                WatchKey key = watchService.take();
+                for (WatchEvent<?> event : key.pollEvents()) {
+                    WatchEvent<Path> ev = (WatchEvent<Path>) event;
+                    Path filename = ev.context();
+                    Path fullPath = path.resolve(filename);
+
+                    if (Files.isRegularFile(fullPath)) {
+                        String ext = filename.toString().toLowerCase();
+                        if (ext.endsWith(".exe") || ext.endsWith(".sh") || ext.endsWith(".bat") ||
+                            ext.endsWith(".ps1") || ext.endsWith(".vbs") || ext.endsWith(".js")) {
+
+                            System.out.println("[DAEMON] Novo arquivo detectado: " + filename);
+                            try {
+                                ScanResult result = scanner.scanFile(fullPath.toString(), autoQuarantine, false);
+                                if (!result.getScore().equals("SEGURO")) {
+                                    System.out.println("[ALERTA] " + result.getFileName() + " -> " + result.getScore());
+                                }
+                            } catch (Exception e) {
+                                System.err.println("Erro ao escanear: " + e.getMessage());
+                            }
+                        }
+                    }
+                }
+                key.reset();
+            }
+        } catch (Exception e) {
+            System.err.println("Daemon parado: " + e.getMessage());
         }
     }
 
