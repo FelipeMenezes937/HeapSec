@@ -1,44 +1,22 @@
-# ByteForge Antivirus
+# HeapSec Antivirus
 
 Scanner antivírus heurístico 100% local em Java 21.
 > Forja de bytes - análise profunda e eficiente
-
-## Arquitetura
-
-```
-┌─────────────────────────────────────────┐
-│  CAMADA 1: HEURÍSTICA RÁPIDA            │
-│  - Entropy, magic headers, extensions    │
-│  - ~95% arquivos passam aqui           │
-└─────────────────────────────────────────┘
-                    ↓
-┌─────────────────────────────────────────┐
-│  CAMADA 2: ANÁLISE PROFUNDA           │
-│  - Strings, PE analysis               │
-│  - Batch processing paralelo         │
-└─────────────────────────────────────────┘
-                    ↓
-┌─────────────────────────────────────────┐
-│  CAMADA 3: SANDBOX (sob demanda)       │
-│  - Execução isolada                    │
-│  - Análise comportamental             │
-└─────────────────────────────────────────┘
-```
 
 ## Uso
 
 ### CLI (Linha de Comando)
 
 ```bash
-./antivirus                  # Menu interativo
-./antivirus arquivo.exe     # Escanear arquivo
-./antivirus /pasta         # Escaneia diretório automaticamente
-./antivirus arquivo.exe --action  # Escanear + quarentena
-./antivirus -l             # Ver logs
-./antivirus -w            # Watch logs em tempo real
-./antivirus -d            # Varredura pesada (ZIP/JAR)
-./antivirus -D            # Modo daemon (background)
-./antivirus -h            # Ajuda
+./heapsec                  # Menu interativo
+./heapsec arquivo.exe     # Escanear arquivo
+./heapsec /pasta         # Escaneia diretório automaticamente
+./heapsec arquivo.exe --action  # Escanear + quarentena
+./heapsec -l             # Ver logs
+./heapsec -w            # Watch logs em tempo real
+./heapsec -d            # Varredura pesada (ZIP/JAR)
+./heapsec -D <path>    # Modo daemon (background)
+./heapsec -h            # Ajuda
 ```
 
 ### Monitor de Processos
@@ -76,10 +54,11 @@ Opções do menu interativo (via CLI):
 
 ## Features
 
-- **Hash Cache**: Arquivos já escaneados são cacheados (-evita re-escaneamento)
+- **Barra de Progresso**: Visual em tempo real durante escaneamento (▓▓▓░░░)
+- **Hash Cache**: Arquivos já escaneados são cacheados (evita re-escaneamento)
 - **Varredura Pesada**: Flag `-d` prepara extração e análise de ZIPs/JARs
 - **Modo Daemon**: Monitoramento em background com `-D`
-- **Menu Interativo**: Interface ncurses com todas opções
+- **Menu Interativo**: Interface com todas opções
 - **Auto-detecção Diretório**: Passa diretório → escaneia automaticamente
 
 ## Score de Ameaça
