@@ -491,6 +491,7 @@ public class AntivirusScanner {
             }
             
             if (!batch.isEmpty()) {
+                printProgress(processed, results.size());
                 List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
                 results.addAll(batchResults);
                 batchNum++;
@@ -550,8 +551,7 @@ public class AntivirusScanner {
     }
 
     private static void printProgress(int processed, int threats) {
-        System.out.print("\rEscaneando: " + processed + " arquivos | Ameacas: " + threats);
-        System.out.flush();
+        System.out.println("[PROGRESSO] Arquivos: " + processed + " | Ameacas: " + threats);
     }
 
     private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean runSandbox) {
@@ -825,8 +825,16 @@ private static void loadBannerFromHome() {
         while (true) {
             printMenu();
             System.out.print("> ");
+            
+            String choice;
+            try {
+                if (!input.hasNextLine()) break;
+                choice = input.nextLine().trim();
+            } catch (Exception e) {
+                break;
+            }
 
-            String choice = input.nextLine().trim();
+            if (choice.isEmpty()) continue;
 
             switch (choice) {
                 case "1", "file" -> {
