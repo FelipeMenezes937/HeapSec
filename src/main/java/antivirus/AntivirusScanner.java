@@ -431,8 +431,9 @@ public class AntivirusScanner {
     private static final String[] SKIP_EXT = {".pak", ".map", ".bin", ".elf", ".so", ".a", ".o", ".dll", ".sys"};
     private static final String[] KNOWN_SAFE_NAMES = {"libc", "kernel", "system", "boot", "init", "udev", "dbus", "glibc"};
 
-    private static final int BATCH_SIZE = 1000;
-    private static final long MIN_SIZE_FOR_PARALLEL = 100 * 1024;
+    private static final int BATCH_SIZE = 500;
+    private static final long MIN_SIZE_FOR_PARALLEL = 50 * 1024;
+    private static final int PARALLEL_THRESHOLD = 20;
 
     public List<ScanResult> scanDirectory(String dirPath, boolean autoAction, boolean runSandbox) throws IOException {
         List<ScanResult> results = new ArrayList<>();
@@ -549,15 +550,32 @@ public class AntivirusScanner {
         return sb.toString();
     }
 
-    private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean runSandbox) {
-        boolean hasLargeFiles = files.stream().anyMatch(p -> {
-            try { return Files.size(p) > MIN_SIZE_FOR_PARALLEL; }
-            catch (Exception e) { return false; }
-        });
-
-        if (!hasLargeFiles || files.size() < 10) {
+private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean runSandbox) {
+        if (files.size() < PARALLEL_THRESHOLD) {
             return scanBatchSequential(files, autoAction, runSandbox);
         }
+
+        List<ScanResult> batchResults = Collections.synchronizedList(new ArrayList<>());
+        int threads = Math.max(4, Math.min(Runtime.getRuntime().availableProcessors(), 16));
+        ForkJoinPool pool = new ForkJoinPool(threads);
+        try {
+            pool.submit(() -> files.parallelStream().forEach(p -> {
+                try {
+                    ScanResult r = scanFile(p.toString(), autoAction, runSandbox);
+                    if (!r.getScore().equals("SEGURO")) {
+                        batchResults.add(r);
+                    }
+                } catch (Exception e) {
+                    // silent
+                }
+            })).get();
+        } catch (Exception e) {
+            // silent
+        } finally {
+            pool.shutdown();
+        }
+        return new ArrayList<>(batchResults);
+    }
 
         List<ScanResult> batchResults = new ArrayList<>();
         int threads = Math.max(2, Math.min(Runtime.getRuntime().availableProcessors() / 2, 8));

@@ -80,92 +80,58 @@ public class BoyerMooreStringDetector {
         "locked files", "restore files", "all files encrypted", "unlock"
     };
 
-    private static final int SEARCH_LIMIT = 2 * 1024 * 1024;
+    private static final int SEARCH_LIMIT = 512 * 1024;
+    private static final int MAX_RESULTS = 10;
 
-    private static int[] buildBadCharTable(String pattern) {
-        int[] table = new int[256];
-        Arrays.fill(table, -1);
-        for (int i = 0; i < pattern.length() - 1; i++) {
-            table[pattern.charAt(i) & 0xFF] = i;
-        }
-        return table;
-    }
-
-    private static boolean boyerMooreSearch(byte[] data, String pattern) {
-        int[] badChar = buildBadCharTable(pattern);
-        byte[] patBytes = pattern.toLowerCase().getBytes();
-        int m = patBytes.length;
-        int n = data.length;
-        int limit = Math.min(n, SEARCH_LIMIT);
-
-        int s = 0;
-        while (s <= limit - m) {
-            int j = m - 1;
-            while (j >= 0) {
-                byte dataByte = data[s + j];
-                if (dataByte >= 'A' && dataByte <= 'Z') dataByte = (byte) (dataByte + 32);
-                if (dataByte != patBytes[j]) break;
-                j--;
-            }
-            if (j < 0) return true;
-            else s += Math.max(1, j - badChar[data[s + j] & 0xFF]);
-        }
-        return false;
-    }
+    private static final AhoCorasickMatcher SUSPICIOUS_MATCHER = new AhoCorasickMatcher(SUSPICIOUS_PATTERNS);
+    private static final AhoCorasickMatcher PASSWORD_MATCHER = new AhoCorasickMatcher(PASSWORD_STEALER_PATTERNS);
+    private static final AhoCorasickMatcher KEYLOGGER_MATCHER = new AhoCorasickMatcher(KEYLOGGER_PATTERNS);
+    private static final AhoCorasickMatcher BANKER_MATCHER = new AhoCorasickMatcher(BANKER_PATTERNS);
+    private static final AhoCorasickMatcher RAT_MATCHER = new AhoCorasickMatcher(RAT_PATTERNS);
+    private static final AhoCorasickMatcher CRYPTOMINER_MATCHER = new AhoCorasickMatcher(CRYPTOMINER_PATTERNS);
+    private static final AhoCorasickMatcher DROPPER_MATCHER = new AhoCorasickMatcher(DROPPER_PATTERNS);
+    private static final AhoCorasickMatcher SPYWARE_MATCHER = new AhoCorasickMatcher(SPYWARE_PATTERNS);
+    private static final AhoCorasickMatcher BOTNET_MATCHER = new AhoCorasickMatcher(BOTNET_PATTERNS);
+    private static final AhoCorasickMatcher RANSOMWARE_MATCHER = new AhoCorasickMatcher(RANSOMWARE_PATTERNS);
 
     public static List<String> detectSuspicious(byte[] data) {
-        List<String> found = new ArrayList<>();
-        for (String pattern : SUSPICIOUS_PATTERNS) {
-            if (boyerMooreSearch(data, pattern)) {
-                found.add(pattern);
-                if (found.size() >= 10) break;
-            }
-        }
-        return found;
+        byte[] searchData = data.length > SEARCH_LIMIT ? Arrays.copyOf(data, SEARCH_LIMIT) : data;
+        return SUSPICIOUS_MATCHER.findMatches(searchData, MAX_RESULTS);
     }
 
     public static List<String> detectPasswordStealer(byte[] data) {
-        List<String> found = new ArrayList<>();
-        for (String pattern : PASSWORD_STEALER_PATTERNS) {
-            if (boyerMooreSearch(data, pattern)) {
-                found.add(pattern);
-                if (found.size() >= 10) break;
-            }
-        }
-        return found;
+        byte[] searchData = data.length > SEARCH_LIMIT ? Arrays.copyOf(data, SEARCH_LIMIT) : data;
+        return PASSWORD_MATCHER.findMatches(searchData, MAX_RESULTS);
     }
 
     public static int countPatterns(byte[] data, String[] patterns) {
-        int count = 0;
-        for (String pattern : patterns) {
-            if (boyerMooreSearch(data, pattern)) {
-                count++;
-                if (count >= 5) break;
-            }
-        }
-        return count;
+        byte[] searchData = data.length > SEARCH_LIMIT ? Arrays.copyOf(data, SEARCH_LIMIT) : data;
+        AhoCorasickMatcher matcher = new AhoCorasickMatcher(patterns);
+        return matcher.countMatches(searchData);
     }
 
     public static MalwareCategory detectCategory(byte[] data) {
-        int psCount = countPatterns(data, PASSWORD_STEALER_PATTERNS);
-        int klCount = countPatterns(data, KEYLOGGER_PATTERNS);
-        int bankCount = countPatterns(data, BANKER_PATTERNS);
-        int ratCount = countPatterns(data, RAT_PATTERNS);
-        int mineCount = countPatterns(data, CRYPTOMINER_PATTERNS);
-        int dropCount = countPatterns(data, DROPPER_PATTERNS);
-        int spyCount = countPatterns(data, SPYWARE_PATTERNS);
-        int botCount = countPatterns(data, BOTNET_PATTERNS);
-        int ranCount = countPatterns(data, RANSOMWARE_PATTERNS);
+        byte[] searchData = data.length > SEARCH_LIMIT ? Arrays.copyOf(data, SEARCH_LIMIT) : data;
 
-        if (psCount >= 8) return MalwareCategory.PASSWORD_STEALER;
-        if (ratCount >= 8) return MalwareCategory.RAT;
-        if (ranCount >= 8) return MalwareCategory.RANSOMWARE;
-        if (mineCount >= 8) return MalwareCategory.CRYPTOMINER;
-        if (bankCount >= 10) return MalwareCategory.BANKER;
-        if (klCount >= 8) return MalwareCategory.KEYLOGGER;
-        if (dropCount >= 8) return MalwareCategory.DROPPER;
-        if (spyCount >= 8) return MalwareCategory.SPYWARE;
-        if (botCount >= 8) return MalwareCategory.BOTNET;
+        int psCount = PASSWORD_MATCHER.countMatches(searchData);
+        int klCount = KEYLOGGER_MATCHER.countMatches(searchData);
+        int bankCount = BANKER_MATCHER.countMatches(searchData);
+        int ratCount = RAT_MATCHER.countMatches(searchData);
+        int mineCount = CRYPTOMINER_MATCHER.countMatches(searchData);
+        int dropCount = DROPPER_MATCHER.countMatches(searchData);
+        int spyCount = SPYWARE_MATCHER.countMatches(searchData);
+        int botCount = BOTNET_MATCHER.countMatches(searchData);
+        int ranCount = RANSOMWARE_MATCHER.countMatches(searchData);
+
+        if (psCount >= 4) return MalwareCategory.PASSWORD_STEALER;
+        if (ratCount >= 4) return MalwareCategory.RAT;
+        if (ranCount >= 4) return MalwareCategory.RANSOMWARE;
+        if (mineCount >= 4) return MalwareCategory.CRYPTOMINER;
+        if (bankCount >= 5) return MalwareCategory.BANKER;
+        if (klCount >= 4) return MalwareCategory.KEYLOGGER;
+        if (dropCount >= 4) return MalwareCategory.DROPPER;
+        if (spyCount >= 4) return MalwareCategory.SPYWARE;
+        if (botCount >= 4) return MalwareCategory.BOTNET;
         return MalwareCategory.UNKNOWN;
     }
 
@@ -188,5 +154,106 @@ public class BoyerMooreStringDetector {
     public enum MalwareCategory {
         PASSWORD_STEALER, KEYLOGGER, BANKER, RAT, CRYPTOMINER,
         DROPPER, SPYWARE, BOTNET, RANSOMWARE, SUSPICIOUS, UNKNOWN
+    }
+
+    private static class AhoCorasickMatcher {
+        private final TrieNode root = new TrieNode();
+        private final String[] patterns;
+
+        AhoCorasickMatcher(String[] patterns) {
+            this.patterns = patterns;
+            for (String pattern : patterns) {
+                insert(pattern.toLowerCase());
+            }
+            buildFailureLinks();
+        }
+
+        private void insert(String pattern) {
+            TrieNode node = root;
+            for (char c : pattern.toCharArray()) {
+                int idx = c & 0xFF;
+                if (node.children[idx] == null) {
+                    node.children[idx] = new TrieNode();
+                }
+                node = node.children[idx];
+            }
+            node.isEnd = true;
+            node.pattern = pattern;
+        }
+
+        private void buildFailureLinks() {
+            Queue<TrieNode> queue = new LinkedList<>();
+            root.fail = root;
+            for (int i = 0; i < 256; i++) {
+                if (root.children[i] != null) {
+                    root.children[i].fail = root;
+                    queue.add(root.children[i]);
+                } else {
+                    root.children[i] = root;
+                }
+            }
+            while (!queue.isEmpty()) {
+                TrieNode current = queue.poll();
+                for (int i = 0; i < 256; i++) {
+                    TrieNode child = current.children[i];
+                    if (child != null) {
+                        child.fail = current.fail.children[i];
+                        queue.add(child);
+                    } else {
+                        current.children[i] = current.fail.children[i];
+                    }
+                }
+            }
+        }
+
+        private static class TrieNode {
+            TrieNode[] children = new TrieNode[256];
+            TrieNode fail;
+            boolean isEnd;
+            String pattern;
+        }
+
+        List<String> findMatches(byte[] data, int maxMatches) {
+            List<String> found = new ArrayList<>();
+            TrieNode state = root;
+
+            for (int i = 0; i < data.length && found.size() < maxMatches; i++) {
+                byte b = data[i];
+                if (b >= 'A' && b <= 'Z') b = (byte) (b + 32);
+                int idx = b & 0xFF;
+                state = state.children[idx];
+
+                TrieNode temp = state;
+                while (temp != root) {
+                    if (temp.isEnd && !found.contains(temp.pattern)) {
+                        found.add(temp.pattern);
+                        if (found.size() >= maxMatches) break;
+                    }
+                    temp = temp.fail;
+                }
+            }
+            return found;
+        }
+
+        int countMatches(byte[] data) {
+            Set<String> found = new HashSet<>();
+            TrieNode state = root;
+
+            for (int i = 0; i < data.length; i++) {
+                byte b = data[i];
+                if (b >= 'A' && b <= 'Z') b = (byte) (b + 32);
+                int idx = b & 0xFF;
+                state = state.children[idx];
+
+                TrieNode temp = state;
+                while (temp != root) {
+                    if (temp.isEnd) {
+                        found.add(temp.pattern);
+                    }
+                    temp = temp.fail;
+                }
+            }
+            return found.size();
+        }
     }
 }

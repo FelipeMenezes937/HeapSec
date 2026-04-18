@@ -6,8 +6,8 @@ import java.nio.file.Path;
 
 public class EntropyAnalyzer {
 
-    private static final int SAMPLE_SIZE = 256 * 1024;
-    private static final int STREAM_BUFFER = 8192;
+    private static final int SAMPLE_SIZE = 64 * 1024;
+    private static final int STREAM_BUFFER = 4096;
 
     public double calculateEntropy(byte[] data) {
         int len = data.length;
