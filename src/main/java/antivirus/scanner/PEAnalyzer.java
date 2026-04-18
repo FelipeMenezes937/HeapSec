@@ -76,7 +76,7 @@ public class PEAnalyzer {
             if (sectionOffset + 40 > data.length) break;
 
             int characteristics = readInt32LE(data, sectionOffset + 36);
-            if ((characteristics & 0x20000000) != 0) hasWrite = true;
+            if ((characteristics & 0x40000000) != 0) hasWrite = true;
             if ((characteristics & 0x20000000) != 0) hasExecute = true;
         }
 
