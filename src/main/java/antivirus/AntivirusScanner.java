@@ -427,9 +427,10 @@ public class AntivirusScanner {
         return scanDirectory(dirPath, autoAction, false);
     }
 
-    private static final String[] SKIP_DIRS = {"/proc", "/sys", "/dev", "/run", "/tmp", "/usr/lib", "/usr/share", "/lib", "/share"};
-    private static final String[] SKIP_EXT = {".pak", ".map", ".bin", ".elf", ".so", ".a", ".o", ".dll", ".sys"};
-    private static final String[] KNOWN_SAFE_NAMES = {"libc", "kernel", "system", "boot", "init", "udev", "dbus", "glibc"};
+    private static final String[] SKIP_DIRS = {"/proc", "/sys", "/dev", "/run", "/tmp", "/usr/lib", "/usr/share", "/lib", "/share", "/snap", "/var/cache"};
+    private static final String[] SKIP_EXT = {".pak", ".map", ".bin", ".elf", ".so", ".a", ".o", ".dll", ".sys", ".dylib", ".deb", ".rpm", ".appimage"};
+    private static final String[] KNOWN_SAFE_NAMES = {"libc", "kernel", "system", "boot", "init", "udev", "dbus", "glibc", "gcc", "clang", "llvm", "arduino", "esp-idf", "platformio"};
+    private static final String[] SKIP_PATH_CONTAINS = {".gradle", "node_modules", "vendor/bundle", "target/debug", "target/release", ".cargo/registry", ".rustup"};
 
     private static final int BATCH_SIZE = 1000;
     private static final long MIN_SIZE_FOR_PARALLEL = 50 * 1024;
@@ -438,6 +439,7 @@ public class AntivirusScanner {
     public List<ScanResult> scanDirectory(String dirPath, boolean autoAction, boolean runSandbox) throws IOException {
         List<ScanResult> results = new ArrayList<>();
         Path basePath = Path.of(dirPath).toAbsolutePath().normalize();
+        long startTime = System.currentTimeMillis();
 
         if (!Files.exists(basePath)) {
             System.out.println("Diretorio nao existe: " + dirPath);
@@ -459,9 +461,6 @@ public class AntivirusScanner {
         int totalBatches = 1;
         
         try {
-            ProcessBuilder pb = new ProcessBuilder("sh", "-c",
-            System.err.flush();
-            
             ProcessBuilder pb = new ProcessBuilder("sh", "-c", 
                 "find '" + dirPath + "' -type f 2>/dev/null");
             pb.redirectErrorStream(true);
@@ -482,8 +481,7 @@ public class AntivirusScanner {
                 processed++;
                 
                 if (batch.size() >= BATCH_SIZE) {
-                    totalBatches = (int) Math.ceil((double) totalFiles / BATCH_SIZE);
-                    printProgress(processed, 0, results.size(), batchNum, totalBatches);
+                    printProgress(processed, results.size());
                     
                     List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
                     results.addAll(batchResults);
@@ -498,20 +496,52 @@ public class AntivirusScanner {
                 batchNum++;
             }
             
-            totalBatches = totalFiles > 0 ? (int) Math.ceil((double) totalFiles / BATCH_SIZE) : 1;
-            printProgress(processed, 0, results.size(), batchNum, totalBatches);
+            printProgress(processed, results.size());
             p.waitFor();
             
         } catch (Exception e) {
             System.err.println("Erro: " + e.getMessage());
         }
 
-        System.out.println("\nEscaneamento concluido. " + results.size() + " amenazas encontradas.");
-        
+        long elapsedMs = System.currentTimeMillis() - startTime;
+        double seconds = elapsedMs / 1000.0;
+        double filesPerSec = totalFiles > 0 && seconds > 0 ? totalFiles / seconds : 0;
+
+        int countSeg = 0, countBaixo = 0, countMedio = 0, countAlto = 0, countCrit = 0;
+        int total = results.size();
+        for (ScanResult r : results) {
+            String s = r.getScore();
+            if (s == null) continue;
+            switch (s) {
+                case "SEGURO" -> countSeg++;
+                case "BAIXO" -> countBaixo++;
+                case "MEDIO" -> countMedio++;
+                case "ALTO" -> countAlto++;
+                case "CRITICO" -> countCrit++;
+            }
+        }
+
+        double pctSeg = total > 0 ? (countSeg / total * 100) : 0;
+        double pctBaixo = total > 0 ? (countBaixo / total * 100) : 0;
+        double pctMedio = total > 0 ? (countMedio / total * 100) : 0;
+        double pctAlto = total > 0 ? (countAlto / total * 100) : 0;
+        double pctCrit = total > 0 ? (countCrit / total * 100) : 0;
+
+        System.out.println("\n");
+        System.out.println("╔══════════════════════════════════════════════════════╗");
+        System.out.println("║           RESULTADO DO ESCANEAMENTO                 ║");
+        System.out.println("╠══════════════════════════════════════════════════════╣");
+        System.out.printf("║  %d arquivos escaneados em %.1fs (%.0f arquivos/s)   %n", totalFiles, seconds, filesPerSec);
+        System.out.println("╠══════════════════════════════════════════════════════╣");
+        System.out.printf("║  SEGURO:    %5d (%.1f%%)                         %n", countSeg, pctSeg);
+        System.out.printf("║  BAIXO:     %5d (%.1f%%)                         %n", countBaixo, pctBaixo);
+        System.out.printf("║  MEDIO:     %5d (%.1f%%)                         %n", countMedio, pctMedio);
+        System.out.printf("║  ALTO:      %5d (%.1f%%)                         %n", countAlto, pctAlto);
+        System.out.printf("║  CRITICO:   %5d (%.1f%%)                         %n", countCrit, pctCrit);
+        System.out.println("╚══════════════════════════════════════════════════════╝");
+
         if (!results.isEmpty()) {
-            int threats = (int) results.stream()
-                .filter(r -> r.getScore() != null && !r.getScore().equals("SEGURO"))
-                .count();
+            int threats = countBaixo + countMedio + countAlto + countCrit;
             String status = threats > 0 ? "AMEACA" : "SEGURO";
             DirectoryCache.markDirectory(dirPath, status);
         }
@@ -519,28 +549,9 @@ public class AntivirusScanner {
         return results;
     }
 
-    private static void printProgress(int processed, long usedMB, int threats, int batchNum, int totalBatches) {
-        String bar = buildProgressBar(batchNum, totalBatches);
-        int percent = totalBatches > 0 ? (int) ((batchNum * 100.0) / totalBatches) : 0;
-        String line = bar + " " + percent + "% | Arquivos: " + processed + " | Mem: " + usedMB + "MB | Ameacas: " + threats;
-        
-        String clearLine = "\r" + "                                        " + "\r";
-        String output = clearLine + line;
-        
-        System.out.print(output);
+    private static void printProgress(int processed, int threats) {
+        System.out.print("\rEscaneando: " + processed + " arquivos | Ameacas: " + threats);
         System.out.flush();
-    }
-
-    private static String buildProgressBar(int batchNum, int totalBatches) {
-        int total = 20;
-        int filled = totalBatches > 0 ? (int) ((batchNum * 20.0) / totalBatches) : 0;
-        filled = Math.min(Math.max(filled, 0), total);
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < total; i++) {
-            sb.append(i < filled ? "▓" : "░");
-        }
-        sb.append("]");
-        return sb.toString();
     }
 
     private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean runSandbox) {
@@ -598,6 +609,11 @@ public class AntivirusScanner {
         String lower = pathStr.toLowerCase();
         for (String skip : SKIP_DIRS) {
             if (lower.contains(skip.toLowerCase())) {
+                return true;
+            }
+        }
+        for (String skip : SKIP_PATH_CONTAINS) {
+            if (lower.contains(skip)) {
                 return true;
             }
         }

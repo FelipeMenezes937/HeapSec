@@ -6,7 +6,6 @@ public class BoyerMooreStringDetector {
 
     private static final String[] SUSPICIOUS_PATTERNS = {
         "cmd.exe /c",
-        "powershell",
         "powershell -nop",
         "wscript ",
         "cscript ",

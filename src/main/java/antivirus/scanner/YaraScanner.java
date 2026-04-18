@@ -80,136 +80,121 @@ public class YaraScanner {
     }
 
     private void loadDefaultRules() {
-        addRule("windows-update", 40);
-        addRule("adobe updater", 35);
-        addRule("kms activation", 50);
-        addRule("crack", 50);
-        addRule("keygen", 50);
-        addRule("free bitcoin", 40);
-        addRule("gift card generator", 45);
-        addRule("steam crack", 55);
-        addRule("fortnite aimbot", 55);
-        addRule("game hack", 45);
-        addRule("loader", 30);
-        addRule("reverse shell", 60);
-        addRule("/dev/tcp/", 50);
-        addRule("Meteoris", 70);
-        addRule("meterpreter", 60);
-        addRule("-enc", 40);
-        addRule("certutil", 35);
-        addRule("certutil -urlcache", 45);
-        addRule("windowstyle hidden", 35);
-        addRule("downloadstring", 35);
-        addRule("passwordfox", 60);
-        addRule("moz_logins", 45);
-        addRule("signons", 40);
-        addRule("firefox account", 40);
-        addRule("chrome cookies", 45);
-        addRule("browser password", 45);
-        addRule("saved login", 35);
-        addRule("webdata", 35);
-        addRule(".sqlite", 30);
+        addRule("windows-update", 50);
+        addRule("adobe updater", 45);
+        addRule("kms activation", 60);
+        addRule("crack", 60);
+        addRule("keygen", 60);
+        addRule("free bitcoin", 50);
+        addRule("gift card generator", 55);
+        addRule("steam crack", 65);
+        addRule("fortnite aimbot", 65);
+        addRule("game hack", 55);
         
-        addRule("password", 15);
-        addRule("logins", 20);
-        addRule("encrypted", 15);
-        addRule("decrypt", 15);
-        addRule("credential", 25);
-        addRule("netpass", 30);
-        addRule("pwdump", 40);
-        addRule("mimikatz", 60);
-        addRule("lazagne", 45);
-        addRule("pony stealer", 50);
+        addRule("reverse shell", 70);
+        addRule("/dev/tcp/", 60);
+        addRule("Meteoris", 80);
+        addRule("meterpreter", 70);
+        addRule("-enc", 50);
+        addRule("certutil -urlcache", 55);
+        addRule("windowstyle hidden", 45);
+        addRule("downloadstring", 45);
+        addRule("passwordfox", 70);
         
-        addRule("keylog", 35);
-        addRule("keystroke", 30);
-        addRule("SetWindowsHookEx", 40);
-        addRule("GetAsyncKeyState", 40);
-        addRule("WM_KEYDOWN", 35);
+        addRule("netpass", 40);
+        addRule("pwdump", 50);
+        addRule("mimikatz", 70);
+        addRule("lazagne", 55);
+        addRule("pony stealer", 60);
         
-        addRule("banking", 30);
-        addRule("creditcard", 35);
-        addRule("cvv", 30);
-        addRule("iban", 25);
-        addRule("swift code", 30);
+        addRule("SetWindowsHookEx", 50);
+        addRule("GetAsyncKeyState", 50);
         
-        addRule("njrat", 60);
-        addRule("asyncrat", 55);
-        addRule("quasar", 50);
-        addRule("remcos", 55);
-        addRule("backdoor", 45);
-        addRule("trojan", 40);
-        addRule("powershell -nop", 45);
-        addRule("powershell", 25);
+        addRule("creditcard", 55);
+        addRule("cvv", 55);
         
-        addRule("xmrig", 45);
-        addRule("cryptonight", 40);
-        addRule("stratum", 35);
+        addRule("njrat", 70);
+        addRule("asyncrat", 65);
+        addRule("quasar", 60);
+        addRule("remcos", 65);
+        addRule("backdoor", 65);
+        addRule("powershell -nop", 55);
         
-        addRule("ransom", 50);
-        addRule("your files", 45);
-        addRule("decrypt", 30);
+        addRule("xmrig", 55);
+        addRule("ransom", 60);
         
-        addRule("botnet", 45);
-        addRule("ddos", 40);
-        addRule("syn flood", 40);
+        addRule("botnet", 55);
+        addRule("ddos", 50);
         
-        addRule("dropper", 40);
-        addRule("downloader", 35);
-        addRule("payload", 30);
-        addRule("stager", 35);
-        addRule("wscript", 35);
-        addRule("mshta", 35);
+        addRule("CreateRemoteThread", 55);
         
-        addRule("spyware", 45);
-        addRule("screenshot", 30);
-        addRule("clipboard", 25);
-        addRule("webcam", 35);
+        addRule("coinbase", 45);
+        addRule("bitcoin wallet", 55);
+        addRule("wallet.dat", 50);
+        addRule("seed phrase", 55);
         
-        addRule("shellcode", 35);
-        addRule("virtualalloc", 35);
-        addRule("CreateRemoteThread", 40);
-        addRule("OpenProcess", 30);
+        addRule("netcat", 50);
+        addRule("nc.exe", 45);
+        addRule("ncat", 45);
+        addRule("skenlogin", 65);
         
-        addRule("base64", 20);
-        addRule("exec", 15);
-        addRule("cmd.exe", 25);
-        addRule("powershell.exe", 30);
-        addRule("wscript.exe", 30);
-        addRule("cscript.exe", 30);
-        addRule("mshta.exe", 35);
+        addRule("emotet", 80);
+        addRule("trickbot", 75);
+        addRule("qakbot", 75);
+        addRule("log4shell", 70);
         
-        addRule("http://", 10);
-        addRule("https://", 10);
-        addRule("connect back", 40);
+        addRule("wannacry", 80);
+        addRule("petya", 75);
+        addRule("notpetya", 75);
         
-        addRule("admin", 10);
-        addRule("root", 15);
-        addRule("sudo", 15);
-        addRule("su -", 15);
+        addRule("dropper", 55);
+        addRule("downloader", 50);
+        addRule("payload", 45);
+        addRule("stager", 50);
+        addRule("wscript", 45);
+        addRule("mshta", 45);
+        
+        addRule("spyware", 55);
+        
+        addRule("shellcode", 55);
+        addRule("virtualalloc", 55);
+        addRule("OpenProcess", 50);
+        
+        addRule("base64", 40);
+        addRule("cmd.exe", 45);
+        addRule("powershell.exe", 50);
+        addRule("wscript.exe", 50);
+        addRule("mshta.exe", 55);
+        
+        addRule("connect back", 60);
+        
+        addRule("admin", 20);
+        addRule("root", 25);
+        addRule("sudo", 25);
+        addRule("su -", 25);
 
-        addRule("coinbase", 35);
-        addRule("blockchain", 30);
-        addRule("ethereum", 35);
-        addRule("bitcoin wallet", 45);
-        addRule("wallet.dat", 40);
-        addRule("private key", 35);
-        addRule("seed phrase", 45);
-        addRule("mnemonic", 40);
+        addRule("coinbase", 40);
+        addRule("blockchain", 35);
+        addRule("ethereum", 40);
+        addRule("bitcoin wallet", 50);
+        addRule("wallet.dat", 45);
+        addRule("private key", 40);
+        addRule("seed phrase", 50);
+        addRule("mnemonic", 45);
 
-        addRule("netcat", 40);
-        addRule("nc.exe", 35);
-        addRule("socat", 35);
-        addRule("ncat", 35);
+        addRule("netcat", 45);
+        addRule("nc.exe", 40);
+        addRule("socat", 40);
+        addRule("ncat", 40);
         addRule("skenlogin", 55);
         addRule("xunnel", 50);
-        addRule("ssh tunneling", 45);
+        addRule("ssh tunneling", 50);
 
         addRule("poison ivy", 60);
         addRule("gray", 55);
         addRule("habo", 55);
-        addRule("spy", 50);
-        addRule("agent", 40);
+        addRule("spy", 60);
+        addRule("agent", 50);
 
         addRule("emotet", 70);
         addRule("trickbot", 65);
