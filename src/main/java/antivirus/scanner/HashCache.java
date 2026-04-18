@@ -149,4 +149,13 @@ public class HashCache {
     public static int size() {
         return cache.size();
     }
+
+    public static void clear() {
+        cache.clear();
+        try {
+            Files.deleteIfExists(Path.of(CACHE_FILE));
+        } catch (Exception e) {
+            // silent
+        }
+    }
 }

@@ -1,7 +1,7 @@
 #!/bin/bash
 # HeapSec - Scanner antivírus
 
-CP="$(cd "$(dirname "$0")" && pwd)/out"
+CP="$(cd "$(dirname "$0")" && pwd)/out:$(cd "$(dirname "$0")" && pwd)/resources"
 
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "HeapSec - Antivírus Local"

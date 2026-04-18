@@ -66,28 +66,43 @@ public class ScanResult {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("=== Scan Result ===\n");
-        sb.append("File: ").append(fileName).append("\n");
-        sb.append("Size: ").append(size).append(" bytes\n");
-        sb.append("Entropy: ").append(String.format("%.2f", entropy)).append("\n");
-        sb.append("Is PE: ").append(isPe).append("\n");
-        sb.append("Double Extension: ").append(doubleExtension).append("\n");
-        sb.append("Suspicious Strings: ").append(suspiciousStrings.size() > 0 ? suspiciousStrings : "None").append("\n");
-        if (critical) {
-            sb.append("*** CRITICO ***\n");
-        }
-        sb.append("Threat Level: ").append(score).append("\n");
-        if (scoreValue > 0) {
-            sb.append("Score: ").append(scoreValue).append("\n");
-        }
+        sb.append("┌─────────────────────────────────┐\n");
+        sb.append("│  SCAN RESULT                    │\n");
+        sb.append("├─────────────────────────────────┤\n");
+        sb.append("│ name: ").append(fileName).append("\n");
+        sb.append("│ size: ").append(formatSize(size)).append("\n");
+        sb.append("│ entropy: ").append(String.format("%.2f", entropy)).append("\n");
+        sb.append("├─────────────────────────────────┤\n");
+        
+        String badge = getBadge();
+        sb.append("│ status: ").append(badge).append("\n");
+        
         if (!threats.isEmpty()) {
-            sb.append("Threats:\n");
-            for (String threat : threats) {
-                sb.append("  - ").append(threat).append("\n");
+            sb.append("├─────────────────────────────────┤\n");
+            sb.append("│ threats:                        │\n");
+            for (String t : threats) {
+                if (t.length() > 30) {
+                    sb.append("│   • ").append(t.substring(0, 27)).append("... │\n");
+                } else {
+                    sb.append("│   • ").append(t).append("\n");
+                }
             }
         }
-        if (quarantined) sb.append(">>> QUARENTENA: Arquivo movido\n");
-        if (processKilled) sb.append(">>> Acao: Processo encerrado\n");
+        sb.append("└─────────────────────────────────┘\n");
         return sb.toString();
+    }
+    
+    private String getBadge() {
+        if (score.equals("CRITICO")) return "⚠ CRITICO";
+        if (score.equals("ALTO")) return "✱ ALTO";
+        if (score.equals("MEDIO")) return "~ MEDIO";
+        if (score.equals("BAIXO")) return ". BAIXO";
+        return "✓ SEGURO";
+    }
+    
+    private String formatSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+        return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
     }
 }

@@ -43,21 +43,47 @@ public class QuarantineManager {
                 return false;
             }
 
-            // Gera nome unico com timestamp
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
             String fileName = source.getFileName().toString();
             String quarantinedName = timestamp + "_" + fileName;
             
             Path dest = Path.of(QUARANTINE_DIR, quarantinedName);
-            // Move o arquivo para a quarentena
             Files.move(source, dest, StandardCopyOption.REPLACE_EXISTING);
             
-            // Registra a acao em log
             logAction(fileName, quarantinedName);
             return true;
         } catch (IOException e) {
             System.err.println("Erro ao mover para quarentena: " + e.getMessage());
             return false;
+        }
+    }
+
+    public boolean delete(String filePath) {
+        try {
+            Path source = Path.of(filePath);
+            if (!Files.exists(source)) {
+                System.err.println("Arquivo nao encontrado: " + filePath);
+                return false;
+            }
+            String fileName = source.getFileName().toString();
+            Files.delete(source);
+            logDelete(fileName);
+            return true;
+        } catch (IOException e) {
+            System.err.println("Erro ao deletar: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void logDelete(String fileName) {
+        try {
+            Path logFile = Path.of(QUARANTINE_DIR, "quarantine.log");
+            String entry = String.format("[%s] DELETADO: %s%n", 
+                LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                fileName);
+            Files.writeString(logFile, entry, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            System.err.println("Erro ao logar: " + e.getMessage());
         }
     }
 
