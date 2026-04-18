@@ -218,10 +218,14 @@ public class BoyerMooreStringDetector {
             TrieNode state = root;
 
             for (int i = 0; i < data.length && found.size() < maxMatches; i++) {
-                byte b = data[i];
-                if (b >= 'A' && b <= 'Z') b = (byte) (b + 32);
-                int idx = b & 0xFF;
-                state = state.children[idx];
+                int b = data[i] & 0xFF;
+                if (b >= 'A' && b <= 'Z') b = b + 32;
+                state = state.children[b];
+
+                if (state == null) {
+                    state = root;
+                    continue;
+                }
 
                 TrieNode temp = state;
                 while (temp != root) {
@@ -240,10 +244,14 @@ public class BoyerMooreStringDetector {
             TrieNode state = root;
 
             for (int i = 0; i < data.length; i++) {
-                byte b = data[i];
-                if (b >= 'A' && b <= 'Z') b = (byte) (b + 32);
-                int idx = b & 0xFF;
-                state = state.children[idx];
+                int b = data[i] & 0xFF;
+                if (b >= 'A' && b <= 'Z') b = b + 32;
+                state = state.children[b];
+
+                if (state == null) {
+                    state = root;
+                    continue;
+                }
 
                 TrieNode temp = state;
                 while (temp != root) {
