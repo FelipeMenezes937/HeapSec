@@ -5,6 +5,8 @@ import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
 
+import antivirus.security.PathValidator;
+
 public class DirectoryCache {
     
     private static final String CACHE_DIR = System.getProperty("user.home") + "/.antivirus";
@@ -64,15 +66,23 @@ public class DirectoryCache {
     
     public static DirInfo getDirInfo(String dirPath) {
         try {
-            Path dir = Path.of(dirPath);
+            Path dir = Path.of(dirPath).toAbsolutePath().normalize();
             if (!Files.exists(dir) || !Files.isDirectory(dir)) return null;
+            if (PathValidator.isSymlink(dir)) return null;
             
             long newest = 0;
             long totalSize = 0;
             int fileCount = 0;
             
             var files = Files.walk(dir).filter(p -> {
-                try { return p.toFile().isFile() && !p.toString().contains("/."); }
+                try { 
+                    if (p.toFile().isFile() && !p.toString().contains("/.") && !PathValidator.isSymlink(p)) {
+                        if (Files.size(p) <= 100 * 1024 * 1024) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
                 catch (Exception e) { return false; }
             }).toList();
             

@@ -5,6 +5,8 @@ import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.concurrent.ConcurrentHashMap;
 
+import antivirus.security.PathValidator;
+
 public class HashCache {
 
     private static final String CACHE_FILE = System.getProperty("user.home") + "/.antivirus/cache.db";
@@ -26,17 +28,26 @@ public class HashCache {
 
     public static void init() {
         try {
-            if (Files.exists(Paths.get(CACHE_FILE))) {
-                Files.lines(Paths.get(CACHE_FILE)).forEach(line -> {
+            Path cachePath = Paths.get(CACHE_FILE);
+            if (Files.exists(cachePath)) {
+                if (PathValidator.isSymlink(cachePath)) {
+                    System.err.println("Cache file is a symlink - clearing for security");
+                    Files.deleteIfExists(cachePath);
+                    return;
+                }
+                Files.lines(cachePath).forEach(line -> {
                     try {
                         String[] parts = line.split(":", 5);
                         if (parts.length >= 4) {
-                            cache.put(parts[0], new CacheEntry(
-                                parts[1],
-                                Long.parseLong(parts[2]),
-                                parts[3],
-                                Long.parseLong(parts[4])
-                            ));
+                            Path filePath = Paths.get(parts[0]).toAbsolutePath().normalize();
+                            if (Files.exists(filePath) && !PathValidator.isSymlink(filePath)) {
+                                cache.put(parts[0], new CacheEntry(
+                                    parts[1],
+                                    Long.parseLong(parts[2]),
+                                    parts[3],
+                                    Long.parseLong(parts[4])
+                                ));
+                            }
                         }
                     } catch (Exception e) {
                         // skip invalid lines
@@ -114,22 +125,38 @@ public class HashCache {
     }
 
     public static boolean isCached(Path file) {
-        String key = file.toAbsolutePath().toString();
-        return cache.containsKey(key);
+        try {
+            Path normalized = file.toAbsolutePath().normalize();
+            if (!PathValidator.validateForRead(normalized)) {
+                return false;
+            }
+            String key = normalized.toString();
+            return cache.containsKey(key);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public static String getCachedResult(Path file) {
-        String key = file.toAbsolutePath().toString();
-        CacheEntry entry = cache.get(key);
-        if (entry == null) return null;
-
         try {
-            long currentSize = Files.size(file);
-            if (currentSize != entry.fileSize) {
-                cache.remove(key);
+            Path normalized = file.toAbsolutePath().normalize();
+            if (!PathValidator.validateForRead(normalized)) {
                 return null;
             }
-            return entry.result;
+            String key = normalized.toString();
+            CacheEntry entry = cache.get(key);
+            if (entry == null) return null;
+
+            try {
+                long currentSize = Files.size(file);
+                if (currentSize != entry.fileSize) {
+                    cache.remove(key);
+                    return null;
+                }
+                return entry.result;
+            } catch (Exception e) {
+                return null;
+            }
         } catch (Exception e) {
             return null;
         }
@@ -137,9 +164,13 @@ public class HashCache {
 
     public static void put(Path file, String result) {
         try {
-            String key = file.toAbsolutePath().toString();
-            String hash = getFileHash(file);
-            long size = Files.size(file);
+            Path normalized = file.toAbsolutePath().normalize();
+            if (!PathValidator.validateForRead(normalized)) {
+                return;
+            }
+            String key = normalized.toString();
+            String hash = getFileHash(normalized);
+            long size = Files.size(normalized);
             cache.put(key, new CacheEntry(hash, System.currentTimeMillis(), result, size));
         } catch (Exception e) {
             // silent

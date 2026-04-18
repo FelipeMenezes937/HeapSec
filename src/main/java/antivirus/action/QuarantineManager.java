@@ -5,8 +5,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.LinkOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+
+import antivirus.security.PathValidator;
 
 /**
  * Gerenciador de quarentena de arquivos suspects.
@@ -22,10 +26,42 @@ public class QuarantineManager {
      */
     public QuarantineManager() {
         try {
-            Files.createDirectories(Path.of(QUARANTINE_DIR));
+            Path qDir = Path.of(QUARANTINE_DIR);
+            if (Files.exists(qDir)) {
+                if (PathValidator.isSymlink(qDir)) {
+                    throw new IOException("Diretorio de quarentena e um symlink - seguranca violada");
+                }
+            } else {
+                Files.createDirectories(qDir);
+            }
         } catch (IOException e) {
             System.err.println("Erro ao criar diretorio de quarentena: " + e.getMessage());
         }
+    }
+
+    private boolean validateSource(Path source) {
+        if (!Files.exists(source, LinkOption.NOFOLLOW_LINKS)) {
+            System.err.println("Arquivo nao encontrado: " + source);
+            return false;
+        }
+
+        if (PathValidator.isSymlink(source)) {
+            System.err.println("Arquivo e um symlink - ignora por seguranca: " + source);
+            return false;
+        }
+
+        if (!Files.isRegularFile(source)) {
+            System.err.println("Nao e um arquivo regular: " + source);
+            return false;
+        }
+
+        PathValidator.ValidationResult result = PathValidator.validateFileOperation(source, PathValidator.Operation.DELETE);
+        if (!result.valid) {
+            System.err.println("Validacao falhou: " + result.error);
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -37,19 +73,35 @@ public class QuarantineManager {
      */
     public boolean quarantine(String filePath) {
         try {
-            Path source = Path.of(filePath);
-            if (!Files.exists(source)) {
-                System.err.println("Arquivo nao encontrado: " + filePath);
+            Path source = Path.of(filePath).toAbsolutePath().normalize();
+
+            if (!validateSource(source)) {
                 return false;
             }
 
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS"));
             String fileName = source.getFileName().toString();
-            String quarantinedName = timestamp + "_" + fileName;
-            
-            Path dest = Path.of(QUARANTINE_DIR, quarantinedName);
-            Files.move(source, dest, StandardCopyOption.REPLACE_EXISTING);
-            
+            String sanitizedName = PathValidator.sanitizePath(fileName);
+            String quarantinedName = timestamp + "_" + sanitizedName;
+
+            Path destDir = Path.of(QUARANTINE_DIR);
+            if (PathValidator.isSymlink(destDir)) {
+                System.err.println("Diretorio de quarentena e symlink!");
+                return false;
+            }
+
+            Path dest = destDir.resolve(quarantinedName);
+
+            if (Files.exists(dest)) {
+                if (PathValidator.isSymlink(dest)) {
+                    System.err.println("Destino e symlink!");
+                    return false;
+                }
+                dest = destDir.resolve(timestamp + "_" + System.nanoTime() + "_" + sanitizedName);
+            }
+
+            Files.move(source, dest, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+
             logAction(fileName, quarantinedName);
             return true;
         } catch (IOException e) {
@@ -60,11 +112,12 @@ public class QuarantineManager {
 
     public boolean delete(String filePath) {
         try {
-            Path source = Path.of(filePath);
-            if (!Files.exists(source)) {
-                System.err.println("Arquivo nao encontrado: " + filePath);
+            Path source = Path.of(filePath).toAbsolutePath().normalize();
+
+            if (!validateSource(source)) {
                 return false;
             }
+
             String fileName = source.getFileName().toString();
             Files.delete(source);
             logDelete(fileName);

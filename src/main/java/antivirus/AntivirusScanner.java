@@ -27,6 +27,7 @@ import antivirus.scanner.BoyerMooreStringDetector;
 import antivirus.scanner.DirectoryCache;
 import antivirus.scanner.YaraScanner;
 import antivirus.scanner.ZipExtractor;
+import antivirus.security.PathValidator;
 
 public class AntivirusScanner {
 
@@ -107,7 +108,23 @@ public class AntivirusScanner {
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
 
     public ScanResult scanFile(String filePath, boolean autoAction, boolean runSandbox, boolean decompress) throws IOException {
-        Path path = Path.of(filePath);
+        Path path = Path.of(filePath).toAbsolutePath().normalize();
+
+        PathValidator.ValidationResult validation = PathValidator.validateFileOperation(path, PathValidator.Operation.READ);
+        if (!validation.valid) {
+            return new ScanResult(
+                Path.of(filePath).getFileName().toString(),
+                0,
+                0,
+                List.of(),
+                false,
+                false,
+                "SEGURO",
+                List.of("Arquivo invalido: " + validation.error),
+                false,
+                false
+            );
+        }
 
         if (HashCache.isCached(path)) {
             long fileSize = Files.size(path);
@@ -130,6 +147,20 @@ public class AntivirusScanner {
         long fileSize;
         try {
             if (Files.isDirectory(path)) {
+                if (PathValidator.isSymlink(path)) {
+                    return new ScanResult(
+                        path.getFileName().toString(),
+                        0,
+                        0,
+                        List.of(),
+                        false,
+                        false,
+                        "SEGURO",
+                        List.of("Diretorio symlink ignorado"),
+                        false,
+                        false
+                    );
+                }
                 List<ScanResult> results = scanDirectory(path.toString(), false, false);
                 return new ScanResult(
                     path.getFileName().toString(),
@@ -407,6 +438,21 @@ public class AntivirusScanner {
         List<ScanResult> results = new ArrayList<>();
         Path basePath = Path.of(dirPath).toAbsolutePath().normalize();
 
+        if (!Files.exists(basePath)) {
+            System.out.println("Diretorio nao existe: " + dirPath);
+            return results;
+        }
+
+        if (PathValidator.isSymlink(basePath)) {
+            System.out.println("Diretorio e symlink - ignorado por seguranca: " + dirPath);
+            return results;
+        }
+
+        if (!Files.isDirectory(basePath)) {
+            System.out.println("Nao e um diretorio: " + dirPath);
+            return results;
+        }
+
         System.out.println("Contando arquivos...");
         System.out.flush();
         
@@ -553,6 +599,12 @@ public class AntivirusScanner {
     }
 
     private boolean shouldSkip(Path path) {
+        try {
+            if (PathValidator.isSymlink(path)) return true;
+        } catch (Exception e) {
+            return true;
+        }
+
         String pathStr = path.toString();
         String lower = pathStr.toLowerCase();
         for (String skip : SKIP_DIRS) {
