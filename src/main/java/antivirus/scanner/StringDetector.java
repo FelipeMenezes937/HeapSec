@@ -236,15 +236,15 @@ public class StringDetector {
         int botCount = countPatterns(data, BOTNET_PATTERNS);
         int ranCount = countPatterns(data, RANSOMWARE_PATTERNS);
 
-        if (psCount >= 5) return MalwareCategory.PASSWORD_STEALER;
-        if (ratCount >= 5) return MalwareCategory.RAT;
-        if (ranCount >= 5) return MalwareCategory.RANSOMWARE;
-        if (mineCount >= 5) return MalwareCategory.CRYPTOMINER;
-        if (bankCount >= 6) return MalwareCategory.BANKER;
-        if (klCount >= 5) return MalwareCategory.KEYLOGGER;
-        if (dropCount >= 5) return MalwareCategory.DROPPER;
-        if (spyCount >= 5) return MalwareCategory.SPYWARE;
-        if (botCount >= 5) return MalwareCategory.BOTNET;
+        if (psCount >= 8) return MalwareCategory.PASSWORD_STEALER;
+        if (ratCount >= 8) return MalwareCategory.RAT;
+        if (ranCount >= 8) return MalwareCategory.RANSOMWARE;
+        if (mineCount >= 8) return MalwareCategory.CRYPTOMINER;
+        if (bankCount >= 10) return MalwareCategory.BANKER;
+        if (klCount >= 8) return MalwareCategory.KEYLOGGER;
+        if (dropCount >= 8) return MalwareCategory.DROPPER;
+        if (spyCount >= 8) return MalwareCategory.SPYWARE;
+        if (botCount >= 8) return MalwareCategory.BOTNET;
         return MalwareCategory.UNKNOWN;
     }
 

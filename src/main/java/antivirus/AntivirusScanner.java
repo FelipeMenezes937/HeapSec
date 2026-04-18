@@ -244,33 +244,35 @@ public class AntivirusScanner {
             doubleExtension,
             peAnalysis.isValidPE(),
             threatLevel,
+            score,
             threats,
             quarantined,
-            processKilled
+            processKilled,
+            score >= 120
         );
     }
 
     private int calculateThreatScore(double entropy, int suspiciousCount, boolean doubleExt, PEAnalysis peAnalysis, int passwordStealerCount) {
         int score = 0;
-        if (entropy > 7.8) score += 40;
-        else if (entropy > 7.2) score += 15;
-        if (suspiciousCount > 3) score += 30;
-        else if (suspiciousCount > 5) score += 10;
-        if (doubleExt) score += 40;
-        if (peAnalysis.hasPackerSections()) score += 25;
+        if (entropy > 8.2) score += 40;
+        else if (entropy > 7.9) score += 15;
+        if (suspiciousCount >= 4) score += 30;
+        else if (suspiciousCount >= 6) score += 10;
+        if (doubleExt) score += 50;
+        if (peAnalysis.hasPackerSections()) score += 30;
         if (peAnalysis.hasWriteAndExecute()) score += 35;
 
-        if (passwordStealerCount >= 5) score += 40;
-        else if (passwordStealerCount >= 3) score += 20;
+        if (passwordStealerCount >= 6) score += 40;
+        else if (passwordStealerCount >= 4) score += 20;
 
         return score;
     }
 
     private String getThreatLevel(int score) {
-        if (score >= 100) return "CRITICO";
-        if (score >= 70) return "ALTO";
-        if (score >= 45) return "MEDIO";
-        if (score >= 25) return "BAIXO";
+        if (score >= 120) return "CRITICO";
+        if (score >= 85) return "ALTO";
+        if (score >= 55) return "MEDIO";
+        if (score >= 30) return "BAIXO";
         return "SEGURO";
     }
 
@@ -285,11 +287,11 @@ public class AntivirusScanner {
             boolean doubleExt = extensionChecker.check(path.getFileName().toString());
 
             int score = 0;
-            if (entropy > 7.8) score += 40;
-            if (strings.size() >= 2) score += 20;
+            if (entropy > 8.2) score += 40;
+            if (strings.size() >= 4) score += 20;
             if (doubleExt) score += 50;
 
-            return score >= 45;
+            return score >= 55;
         } catch (Exception e) {
             return false;
         }
@@ -458,6 +460,32 @@ public class AntivirusScanner {
 
         if (args.length == 0) {
             runInteractiveMenu(scanner, input);
+            return;
+        }
+
+        if (args[0].equals("-h") || args[0].equals("--help")) {
+            System.out.println("""
+                HeapSec Antivirus - Ajuda
+                ========================
+
+                USO:
+                    ./heapsec [opcoes] <arquivo ou diretorio>
+
+                OPCOES:
+                    -h, --help           Esta ajuda
+                    -l, --logs           Ver logs
+                    -w, --watch          Watch logs em tempo real
+                    --daemon <path>      Modo daemon (monitoramento)
+                    --action             Auto-quarentena
+                    --sandbox            Executar em sandbox
+                    -d, --decompress      Varredura pesada (ZIP/JAR)
+
+                EXEMPLOS:
+                    ./heapsec arquivo.exe
+                    ./heapsec /home/felipe/Downloads
+                    ./heapsec arquivo.exe --action
+                    ./heapsec -d arquivo.zip
+                """);
             return;
         }
 
