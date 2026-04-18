@@ -23,13 +23,12 @@ import antivirus.scanner.HashCache;
 import antivirus.scanner.PEAnalyzer;
 import antivirus.scanner.PEAnalysis;
 import antivirus.scanner.ScanResult;
-import antivirus.scanner.StringDetector;
+import antivirus.scanner.BoyerMooreStringDetector;
 import antivirus.scanner.ZipExtractor;
 
 public class AntivirusScanner {
 
     private final EntropyAnalyzer entropyAnalyzer;
-    private final StringDetector stringDetector;
     private final PEAnalyzer peAnalyzer;
     private final ExtensionChecker extensionChecker;
     private final QuarantineManager quarantineManager;
@@ -40,7 +39,6 @@ public class AntivirusScanner {
 
     public AntivirusScanner() {
         this.entropyAnalyzer = new EntropyAnalyzer();
-        this.stringDetector = new StringDetector();
         this.peAnalyzer = new PEAnalyzer();
         this.extensionChecker = new ExtensionChecker();
         this.quarantineManager = new QuarantineManager();
@@ -186,14 +184,14 @@ public class AntivirusScanner {
 
         List<String> suspiciousStrings = Collections.emptyList();
         List<String> passwordStealerPatterns = Collections.emptyList();
-        StringDetector.MalwareCategory category = StringDetector.MalwareCategory.UNKNOWN;
+        BoyerMooreStringDetector.MalwareCategory category = BoyerMooreStringDetector.MalwareCategory.UNKNOWN;
         int categoryScore = 0;
 
-        if (stringDetector.isWorthScanning(entropy)) {
-            suspiciousStrings = stringDetector.detect(fileData);
-            passwordStealerPatterns = stringDetector.detectPasswordStealer(fileData);
-            category = stringDetector.detectCategory(fileData);
-            categoryScore = stringDetector.getCategoryScore(fileData);
+        if (entropy > 6.5) {
+            suspiciousStrings = BoyerMooreStringDetector.detectSuspicious(fileData);
+            passwordStealerPatterns = BoyerMooreStringDetector.detectPasswordStealer(fileData);
+            category = BoyerMooreStringDetector.detectCategory(fileData);
+            categoryScore = BoyerMooreStringDetector.getCategoryScore(fileData);
         }
 
         boolean doubleExtension = extensionChecker.check(fileName);
@@ -293,7 +291,7 @@ public class AntivirusScanner {
 
             byte[] data = Files.readAllBytes(path);
             double entropy = entropyAnalyzer.calculateEntropy(data);
-            List<String> strings = stringDetector.detect(data);
+            List<String> strings = BoyerMooreStringDetector.detectSuspicious(data);
             boolean doubleExt = extensionChecker.check(path.getFileName().toString());
 
             int score = 0;
@@ -307,7 +305,7 @@ public class AntivirusScanner {
         }
     }
 
-    private List<String> buildThreats(double entropy, List<String> suspicious, boolean doubleExt, PEAnalysis pe, List<String> passwordStealer, StringDetector.MalwareCategory category) {
+    private List<String> buildThreats(double entropy, List<String> suspicious, boolean doubleExt, PEAnalysis pe, List<String> passwordStealer, BoyerMooreStringDetector.MalwareCategory category) {
         List<String> threats = new ArrayList<>();
         if (entropy > 7.8) threats.add(String.format("Alta entropia (%.2f)", entropy));
         else if (entropy > 7.2) threats.add(String.format("Entropia elevada (%.2f)", entropy));
@@ -318,7 +316,7 @@ public class AntivirusScanner {
         if (passwordStealer.size() >= 3) {
             threats.add("Password stealer: " + String.join(", ", passwordStealer));
         }
-        if (category != StringDetector.MalwareCategory.UNKNOWN && category != StringDetector.MalwareCategory.SUSPICIOUS) {
+        if (category != BoyerMooreStringDetector.MalwareCategory.UNKNOWN && category != BoyerMooreStringDetector.MalwareCategory.SUSPICIOUS) {
             threats.add("Categoria: " + category);
         }
         return threats;
