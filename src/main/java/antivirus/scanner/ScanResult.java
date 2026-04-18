@@ -93,6 +93,7 @@ public class ScanResult {
     }
     
     private String getBadge() {
+        if (score == null) return "? DESCONHECIDO";
         if (score.equals("CRITICO")) return "⚠ CRITICO";
         if (score.equals("ALTO")) return "✱ ALTO";
         if (score.equals("MEDIO")) return "~ MEDIO";

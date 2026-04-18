@@ -140,6 +140,7 @@ public class YaraScanner {
         addRule("backdoor", 45);
         addRule("trojan", 40);
         addRule("powershell -nop", 45);
+        addRule("powershell", 25);
         
         addRule("xmrig", 45);
         addRule("cryptonight", 40);

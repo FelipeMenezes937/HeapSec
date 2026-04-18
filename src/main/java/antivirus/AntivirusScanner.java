@@ -127,21 +127,21 @@ public class AntivirusScanner {
         }
 
         if (HashCache.isCached(path)) {
-            long fileSize = Files.size(path);
             String cachedResult = HashCache.getCachedResult(path);
-            logger.info(AntivirusLogger.Category.SCANNER, "Cache hit: " + filePath);
-            return new ScanResult(
-                path.getFileName().toString(),
-                fileSize,
-                0,
-                List.of(),
-                false,
-                false,
-                cachedResult,
-                List.of("Resultado em cache"),
-                false,
-                false
-            );
+            if (cachedResult != null) {
+                return new ScanResult(
+                    path.getFileName().toString(),
+                    0,
+                    0,
+                    List.of(),
+                    false,
+                    false,
+                    cachedResult,
+                    List.of("Cache"),
+                    false,
+                    false
+                );
+            }
         }
 
         long fileSize;
@@ -431,9 +431,9 @@ public class AntivirusScanner {
     private static final String[] SKIP_EXT = {".pak", ".map", ".bin", ".elf", ".so", ".a", ".o", ".dll", ".sys"};
     private static final String[] KNOWN_SAFE_NAMES = {"libc", "kernel", "system", "boot", "init", "udev", "dbus", "glibc"};
 
-    private static final int BATCH_SIZE = 500;
+    private static final int BATCH_SIZE = 1000;
     private static final long MIN_SIZE_FOR_PARALLEL = 50 * 1024;
-    private static final int PARALLEL_THRESHOLD = 20;
+    private static final int PARALLEL_THRESHOLD = 10;
 
     public List<ScanResult> scanDirectory(String dirPath, boolean autoAction, boolean runSandbox) throws IOException {
         List<ScanResult> results = new ArrayList<>();
@@ -454,71 +454,64 @@ public class AntivirusScanner {
             return results;
         }
 
-        System.out.println("Contando arquivos...");
-        System.out.flush();
-        
+        System.out.println("Escaneando: " + dirPath);
         long totalFiles = 0;
-        try {
-            totalFiles = Files.walk(basePath)
-                .filter(p -> {
-                    try { return p.toFile().isFile() && !shouldSkip(p); }
-                    catch (Exception e) { return false; }
-                })
-                .count();
-        } catch (Exception e) {
-            System.out.println("Aviso: alguns diretorios nao puderam ser acessados");
-        }
+        int totalBatches = 1;
         
-        int totalBatches = (int) Math.ceil((double) totalFiles / BATCH_SIZE);
-        
-        if (DirectoryCache.isDirectoryClean(dirPath)) {
-            System.out.println("Diretorio nao modificado desde ultimo scan. Ignorando...");
-            return results;
-        }
-
-        System.out.println("Escaneando " + dirPath + " (" + totalFiles + " arquivos, ~" + totalBatches + " lotes)...");
-        System.out.println("(Ctrl+C para parar)");
-        System.out.flush();
-
-        int processed = 0;
-        int batchNum = 0;
-
         try {
-            java.util.Iterator<Path> it = Files.walk(basePath)
-                .filter(p -> p.toFile().isFile())
-                .filter(p -> !shouldSkip(p))
-                .iterator();
-
+            ProcessBuilder pb = new ProcessBuilder("sh", "-c",
+            System.err.flush();
+            
+            ProcessBuilder pb = new ProcessBuilder("sh", "-c", 
+                "find '" + dirPath + "' -type f 2>/dev/null");
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            
+            java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
             List<Path> batch = new ArrayList<>(BATCH_SIZE);
-
-            printProgress(0, 0, 0, 0, totalBatches);
-
-            while (it.hasNext()) {
-                batch.add(it.next());
-
-                if (batch.size() >= BATCH_SIZE || !it.hasNext()) {
+            int processed = 0;
+            int batchNum = 0;
+            String line;
+            
+            while ((line = br.readLine()) != null) {
+                Path file = Path.of(line);
+                if (shouldSkip(file)) continue;
+                
+                batch.add(file);
+                totalFiles++;
+                processed++;
+                
+                if (batch.size() >= BATCH_SIZE) {
+                    totalBatches = (int) Math.ceil((double) totalFiles / BATCH_SIZE);
+                    printProgress(processed, 0, results.size(), batchNum, totalBatches);
+                    
                     List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
                     results.addAll(batchResults);
-
-                    processed += batch.size();
                     batchNum++;
-
-                    long usedMB = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-                    usedMB /= 1024 * 1024;
-                    printProgress(processed, usedMB, results.size(), batchNum, totalBatches);
-
                     batch.clear();
-                    System.gc();
                 }
             }
+            
+            if (!batch.isEmpty()) {
+                List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
+                results.addAll(batchResults);
+                batchNum++;
+            }
+            
+            totalBatches = totalFiles > 0 ? (int) Math.ceil((double) totalFiles / BATCH_SIZE) : 1;
+            printProgress(processed, 0, results.size(), batchNum, totalBatches);
+            p.waitFor();
+            
         } catch (Exception e) {
-            System.err.println("Escaneamento interrompido: " + e.getMessage());
+            System.err.println("Erro: " + e.getMessage());
         }
 
         System.out.println("\nEscaneamento concluido. " + results.size() + " amenazas encontradas.");
         
         if (!results.isEmpty()) {
-            int threats = (int) results.stream().filter(r -> !r.getScore().equals("SEGURO")).count();
+            int threats = (int) results.stream()
+                .filter(r -> r.getScore() != null && !r.getScore().equals("SEGURO"))
+                .count();
             String status = threats > 0 ? "AMEACA" : "SEGURO";
             DirectoryCache.markDirectory(dirPath, status);
         }
@@ -550,7 +543,7 @@ public class AntivirusScanner {
         return sb.toString();
     }
 
-private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean runSandbox) {
+    private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean runSandbox) {
         if (files.size() < PARALLEL_THRESHOLD) {
             return scanBatchSequential(files, autoAction, runSandbox);
         }
@@ -562,7 +555,8 @@ private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean
             pool.submit(() -> files.parallelStream().forEach(p -> {
                 try {
                     ScanResult r = scanFile(p.toString(), autoAction, runSandbox);
-                    if (!r.getScore().equals("SEGURO")) {
+                    String score = r.getScore();
+                    if (score != null && !score.equals("SEGURO")) {
                         batchResults.add(r);
                     }
                 } catch (Exception e) {
@@ -577,36 +571,13 @@ private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean
         return new ArrayList<>(batchResults);
     }
 
-        List<ScanResult> batchResults = new ArrayList<>();
-        int threads = Math.max(2, Math.min(Runtime.getRuntime().availableProcessors() / 2, 8));
-        ForkJoinPool pool = new ForkJoinPool(threads);
-        try {
-            pool.submit(() -> files.parallelStream().forEach(p -> {
-                try {
-                    ScanResult r = scanFile(p.toString(), autoAction, runSandbox);
-                    if (!r.getScore().equals("SEGURO")) {
-                        synchronized (batchResults) {
-                            batchResults.add(r);
-                        }
-                    }
-                } catch (Exception e) {
-                    // silent
-                }
-            })).get();
-        } catch (Exception e) {
-            // silent
-        } finally {
-            pool.shutdown();
-        }
-        return batchResults;
-    }
-
     private List<ScanResult> scanBatchSequential(List<Path> files, boolean autoAction, boolean runSandbox) {
         List<ScanResult> batchResults = new ArrayList<>();
         for (Path p : files) {
             try {
                 ScanResult r = scanFile(p.toString(), autoAction, runSandbox);
-                if (!r.getScore().equals("SEGURO")) {
+                String score = r.getScore();
+                if (score != null && !score.equals("SEGURO")) {
                     batchResults.add(r);
                 }
             } catch (Exception e) {
