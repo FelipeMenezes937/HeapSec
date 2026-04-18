@@ -326,7 +326,24 @@ public class AntivirusScanner {
         List<ScanResult> results = new ArrayList<>();
         Path basePath = Path.of(dirPath).toAbsolutePath().normalize();
 
-        System.out.println("Escaneando " + dirPath + " em lotes de " + BATCH_SIZE + "...");
+        System.out.println("Contando arquivos...");
+        System.out.flush();
+        
+        long totalFiles = 0;
+        try {
+            totalFiles = Files.walk(basePath)
+                .filter(p -> {
+                    try { return p.toFile().isFile() && !shouldSkip(p); }
+                    catch (Exception e) { return false; }
+                })
+                .count();
+        } catch (Exception e) {
+            System.out.println("Aviso: alguns diretorios nao puderam ser acessados");
+        }
+        
+        int totalBatches = (int) Math.ceil((double) totalFiles / BATCH_SIZE);
+
+        System.out.println("Escaneando " + dirPath + " (" + totalFiles + " arquivos, ~" + totalBatches + " lotes)...");
         System.out.println("(Ctrl+C para parar)");
         System.out.flush();
 
@@ -341,8 +358,7 @@ public class AntivirusScanner {
 
             List<Path> batch = new ArrayList<>(BATCH_SIZE);
 
-            // Mostrar estado inicial imediatamente
-            printProgress(0, 0, 0, 0);
+            printProgress(0, 0, 0, 0, totalBatches);
 
             while (it.hasNext()) {
                 batch.add(it.next());
@@ -356,7 +372,7 @@ public class AntivirusScanner {
 
                     long usedMB = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
                     usedMB /= 1024 * 1024;
-                    printProgress(processed, usedMB, results.size(), batchNum);
+                    printProgress(processed, usedMB, results.size(), batchNum, totalBatches);
 
                     batch.clear();
                     System.gc();
@@ -370,21 +386,22 @@ public class AntivirusScanner {
         return results;
     }
 
-    private static void printProgress(int processed, long usedMB, int threats, int batchNum) {
-        String bar = buildProgressBar(batchNum);
-        String line = bar + " Arquivos: " + processed + " | Mem: " + usedMB + "MB | Ameacas: " + threats;
+    private static void printProgress(int processed, long usedMB, int threats, int batchNum, int totalBatches) {
+        String bar = buildProgressBar(batchNum, totalBatches);
+        int percent = totalBatches > 0 ? (int) ((batchNum * 100.0) / totalBatches) : 0;
+        String line = bar + " " + percent + "% | Arquivos: " + processed + " | Mem: " + usedMB + "MB | Ameacas: " + threats;
         
-        // Limpar linha anterior e escrever nova
         String clearLine = "\r" + "                                        " + "\r";
         String output = clearLine + line;
         
-        System.err.print(output);
-        System.err.flush();
+        System.out.print(output);
+        System.out.flush();
     }
 
-    private static String buildProgressBar(int batchNum) {
+    private static String buildProgressBar(int batchNum, int totalBatches) {
         int total = 20;
-        int filled = Math.min(batchNum, total);
+        int filled = totalBatches > 0 ? (int) ((batchNum * 20.0) / totalBatches) : 0;
+        filled = Math.min(Math.max(filled, 0), total);
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < total; i++) {
             sb.append(i < filled ? "▓" : "░");
