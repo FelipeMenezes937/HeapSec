@@ -1,7 +1,6 @@
 package antivirus.scanner;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class StringDetector {
 
@@ -174,51 +173,53 @@ public class StringDetector {
         "unlock"
     };
 
-    private static final int MAX_STRING_LEN = 256;
-    private static final int MIN_STRING_LEN = 4;
     private static final int SEARCH_LIMIT = 2 * 1024 * 1024;
 
-    public List<String> detect(byte[] data) {
-        List<String> found = new ArrayList<>();
-        int limit = Math.min(data.length, SEARCH_LIMIT);
+    private static AhoCorasick SUSPICIOUS_AC;
+    private static AhoCorasick PASSWORD_AC;
+    private static AhoCorasick KEYLOGGER_AC;
+    private static AhoCorasick BANKER_AC;
+    private static AhoCorasick RAT_AC;
+    private static AhoCorasick CRYPTOMINER_AC;
+    private static AhoCorasick DROPPER_AC;
+    private static AhoCorasick SPYWARE_AC;
+    private static AhoCorasick BOTNET_AC;
+    private static AhoCorasick RANSOMWARE_AC;
 
-        for (String pattern : SUSPICIOUS_PATTERNS) {
-            byte[] patternBytes = pattern.getBytes();
-            if (searchBytes(data, 0, limit, patternBytes)) {
-                found.add(pattern);
-                if (found.size() >= 10) break;
-            }
+    static {
+        SUSPICIOUS_AC = buildAC(SUSPICIOUS_PATTERNS);
+        PASSWORD_AC = buildAC(PASSWORD_STEALER_PATTERNS);
+        KEYLOGGER_AC = buildAC(KEYLOGGER_PATTERNS);
+        BANKER_AC = buildAC(BANKER_PATTERNS);
+        RAT_AC = buildAC(RAT_PATTERNS);
+        CRYPTOMINER_AC = buildAC(CRYPTOMINER_PATTERNS);
+        DROPPER_AC = buildAC(DROPPER_PATTERNS);
+        SPYWARE_AC = buildAC(SPYWARE_PATTERNS);
+        BOTNET_AC = buildAC(BOTNET_PATTERNS);
+        RANSOMWARE_AC = buildAC(RANSOMWARE_PATTERNS);
+    }
+
+    private static AhoCorasick buildAC(String[] patterns) {
+        AhoCorasick ac = new AhoCorasick();
+        for (String p : patterns) {
+            ac.addPattern(p);
         }
-        return found;
+        ac.build();
+        return ac;
+    }
+
+    public List<String> detect(byte[] data) {
+        int limit = Math.min(data.length, SEARCH_LIMIT);
+        byte[] searchData = Arrays.copyOf(data, limit);
+        List<String> found = SUSPICIOUS_AC.search(searchData, SUSPICIOUS_PATTERNS);
+        return found.subList(0, Math.min(found.size(), 10));
     }
 
     public List<String> detectPasswordStealer(byte[] data) {
-        List<String> found = new ArrayList<>();
         int limit = Math.min(data.length, SEARCH_LIMIT);
-
-        for (String pattern : PASSWORD_STEALER_PATTERNS) {
-            byte[] patternBytes = pattern.getBytes();
-            if (searchBytes(data, 0, limit, patternBytes)) {
-                found.add(pattern);
-                if (found.size() >= 10) break;
-            }
-        }
-        return found;
-    }
-
-    private boolean searchBytes(byte[] data, int start, int end, byte[] pattern) {
-        outer:
-        for (int i = start; i < end - pattern.length; i++) {
-            for (int j = 0; j < pattern.length; j++) {
-                byte b = data[i + j];
-                byte p = pattern[j];
-                if (b >= 'A' && b <= 'Z') b = (byte) (b + 32);
-                if (p >= 'A' && p <= 'Z') p = (byte) (p + 32);
-                if (b != p) continue outer;
-            }
-            return true;
-        }
-        return false;
+        byte[] searchData = Arrays.copyOf(data, limit);
+        List<String> found = PASSWORD_AC.search(searchData, PASSWORD_STEALER_PATTERNS);
+        return found.subList(0, Math.min(found.size(), 10));
     }
 
     public int countPasswordStealerPatterns(byte[] data) {
@@ -226,15 +227,18 @@ public class StringDetector {
     }
 
     public MalwareCategory detectCategory(byte[] data) {
-        int psCount = countPatterns(data, PASSWORD_STEALER_PATTERNS);
-        int klCount = countPatterns(data, KEYLOGGER_PATTERNS);
-        int bankCount = countPatterns(data, BANKER_PATTERNS);
-        int ratCount = countPatterns(data, RAT_PATTERNS);
-        int mineCount = countPatterns(data, CRYPTOMINER_PATTERNS);
-        int dropCount = countPatterns(data, DROPPER_PATTERNS);
-        int spyCount = countPatterns(data, SPYWARE_PATTERNS);
-        int botCount = countPatterns(data, BOTNET_PATTERNS);
-        int ranCount = countPatterns(data, RANSOMWARE_PATTERNS);
+        int limit = Math.min(data.length, SEARCH_LIMIT);
+        byte[] searchData = Arrays.copyOf(data, limit);
+
+        int psCount = PASSWORD_AC.search(searchData, PASSWORD_STEALER_PATTERNS).size();
+        int klCount = KEYLOGGER_AC.search(searchData, KEYLOGGER_PATTERNS).size();
+        int bankCount = BANKER_AC.search(searchData, BANKER_PATTERNS).size();
+        int ratCount = RAT_AC.search(searchData, RAT_PATTERNS).size();
+        int mineCount = CRYPTOMINER_AC.search(searchData, CRYPTOMINER_PATTERNS).size();
+        int dropCount = DROPPER_AC.search(searchData, DROPPER_PATTERNS).size();
+        int spyCount = SPYWARE_AC.search(searchData, SPYWARE_PATTERNS).size();
+        int botCount = BOTNET_AC.search(searchData, BOTNET_PATTERNS).size();
+        int ranCount = RANSOMWARE_AC.search(searchData, RANSOMWARE_PATTERNS).size();
 
         if (psCount >= 8) return MalwareCategory.PASSWORD_STEALER;
         if (ratCount >= 8) return MalwareCategory.RAT;
@@ -246,19 +250,6 @@ public class StringDetector {
         if (spyCount >= 8) return MalwareCategory.SPYWARE;
         if (botCount >= 8) return MalwareCategory.BOTNET;
         return MalwareCategory.UNKNOWN;
-    }
-
-    private int countPatterns(byte[] data, String[] patterns) {
-        int limit = Math.min(data.length, SEARCH_LIMIT);
-        int count = 0;
-        for (String pattern : patterns) {
-            byte[] patternBytes = pattern.getBytes();
-            if (searchBytes(data, 0, limit, patternBytes)) {
-                count++;
-                if (count >= 5) break;
-            }
-        }
-        return count;
     }
 
     public int getCategoryScore(byte[] data) {
@@ -275,6 +266,10 @@ public class StringDetector {
             case DROPPER: return 30;
             default: return 0;
         }
+    }
+
+    public boolean isWorthScanning(double entropy) {
+        return entropy > 6.5;
     }
 
     public enum MalwareCategory {

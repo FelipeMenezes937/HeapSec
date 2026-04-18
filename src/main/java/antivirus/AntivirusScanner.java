@@ -8,6 +8,7 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.ForkJoinPool;
@@ -182,10 +183,19 @@ public class AntivirusScanner {
         logger.info(AntivirusLogger.Category.SCANNER, "Iniciando escaneamento: " + filePath);
 
         double entropy = entropyAnalyzer.calculateEntropy(fileData);
-        List<String> suspiciousStrings = stringDetector.detect(fileData);
-        List<String> passwordStealerPatterns = stringDetector.detectPasswordStealer(fileData);
-        StringDetector.MalwareCategory category = stringDetector.detectCategory(fileData);
-        int categoryScore = stringDetector.getCategoryScore(fileData);
+
+        List<String> suspiciousStrings = Collections.emptyList();
+        List<String> passwordStealerPatterns = Collections.emptyList();
+        StringDetector.MalwareCategory category = StringDetector.MalwareCategory.UNKNOWN;
+        int categoryScore = 0;
+
+        if (stringDetector.isWorthScanning(entropy)) {
+            suspiciousStrings = stringDetector.detect(fileData);
+            passwordStealerPatterns = stringDetector.detectPasswordStealer(fileData);
+            category = stringDetector.detectCategory(fileData);
+            categoryScore = stringDetector.getCategoryScore(fileData);
+        }
+
         boolean doubleExtension = extensionChecker.check(fileName);
         PEAnalysis peAnalysis = peAnalyzer.analyze(fileData);
 
@@ -318,11 +328,12 @@ public class AntivirusScanner {
         return scanDirectory(dirPath, autoAction, false);
     }
 
-    private static final String[] SKIP_DIRS = {"/proc", "/sys", "/dev", "/run", "/tmp"};
-    private static final String[] SKIP_EXT = {".pak", ".map"};
-    private static final int PARALLEL_THREADS = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
+    private static final String[] SKIP_DIRS = {"/proc", "/sys", "/dev", "/run", "/tmp", "/usr/lib", "/usr/share", "/lib", "/share"};
+    private static final String[] SKIP_EXT = {".pak", ".map", ".bin", ".elf", ".so", ".a", ".o", ".dll", ".sys"};
+    private static final String[] KNOWN_SAFE_NAMES = {"libc", "kernel", "system", "boot", "init", "udev", "dbus", "glibc"};
 
     private static final int BATCH_SIZE = 500;
+    private static final long MIN_SIZE_FOR_PARALLEL = 100 * 1024;
 
     public List<ScanResult> scanDirectory(String dirPath, boolean autoAction, boolean runSandbox) throws IOException {
         List<ScanResult> results = new ArrayList<>();
@@ -413,8 +424,18 @@ public class AntivirusScanner {
     }
 
     private List<ScanResult> scanBatch(List<Path> files, boolean autoAction, boolean runSandbox) {
+        boolean hasLargeFiles = files.stream().anyMatch(p -> {
+            try { return Files.size(p) > MIN_SIZE_FOR_PARALLEL; }
+            catch (Exception e) { return false; }
+        });
+
+        if (!hasLargeFiles || files.size() < 10) {
+            return scanBatchSequential(files, autoAction, runSandbox);
+        }
+
         List<ScanResult> batchResults = new ArrayList<>();
-        ForkJoinPool pool = new ForkJoinPool(PARALLEL_THREADS);
+        int threads = Math.max(2, Math.min(Runtime.getRuntime().availableProcessors() / 2, 8));
+        ForkJoinPool pool = new ForkJoinPool(threads);
         try {
             pool.submit(() -> files.parallelStream().forEach(p -> {
                 try {
@@ -436,6 +457,21 @@ public class AntivirusScanner {
         return batchResults;
     }
 
+    private List<ScanResult> scanBatchSequential(List<Path> files, boolean autoAction, boolean runSandbox) {
+        List<ScanResult> batchResults = new ArrayList<>();
+        for (Path p : files) {
+            try {
+                ScanResult r = scanFile(p.toString(), autoAction, runSandbox);
+                if (!r.getScore().equals("SEGURO")) {
+                    batchResults.add(r);
+                }
+            } catch (Exception e) {
+                // silent
+            }
+        }
+        return batchResults;
+    }
+
     private boolean shouldSkip(Path path) {
         String pathStr = path.toString();
         String lower = pathStr.toLowerCase();
@@ -448,6 +484,14 @@ public class AntivirusScanner {
         for (String ext : SKIP_EXT) {
             if (fileName.endsWith(ext)) {
                 return true;
+            }
+        }
+        for (String safe : KNOWN_SAFE_NAMES) {
+            if (fileName.contains(safe)) {
+                try {
+                    long size = Files.size(path);
+                    if (size > 1024 * 1024) return true;
+                } catch (Exception e) {}
             }
         }
         return false;
