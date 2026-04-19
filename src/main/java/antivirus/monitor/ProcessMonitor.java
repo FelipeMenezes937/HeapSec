@@ -64,7 +64,7 @@ public class ProcessMonitor {
 
     private void scanDirectory() {
         try {
-            List<ScanResult> results = scanner.scanDirectory(watchPath, autoQuarantine, decompress);
+            List<ScanResult> results = scanner.scanDirectory(watchPath, autoQuarantine, false, false);
             int threats = 0;
             for (ScanResult r : results) {
                 if (!r.getScore().equals("SEGURO")) {

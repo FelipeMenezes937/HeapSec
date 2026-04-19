@@ -142,6 +142,7 @@ public class YaraScanner {
         addRule("nc.exe", 40);
         addRule("ncat", 35);
         addRule("skenlogin", 60);
+        addRule("EICAR-STANDARD-ANTIVIRUS-TEST-FILE", 100);
 
         addRule("emotet", 80);
         addRule("trickbot", 75);

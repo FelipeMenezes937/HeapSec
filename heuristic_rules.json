@@ -1,0 +1,59 @@
+{
+  "rules": [
+    {
+      "type": "string_combo",
+      "conditions": ["powershell", "download"],
+      "score": 3
+    },
+    {
+      "type": "string_combo",
+      "conditions": ["cmd", "exec"],
+      "score": 3
+    },
+    {
+      "type": "string_combo",
+      "conditions": ["base64", "decode"],
+      "score": 3
+    },
+    {
+      "type": "entropy",
+      "threshold": 7.2,
+      "score": 2
+    },
+    {
+      "type": "entropy",
+      "threshold": 7.5,
+      "score": 3
+    },
+    {
+      "type": "imports",
+      "conditions": ["VirtualAlloc"],
+      "score": 3
+    },
+    {
+      "type": "imports",
+      "conditions": ["WriteProcessMemory"],
+      "score": 4
+    },
+    {
+      "type": "imports",
+      "conditions": ["CreateRemoteThread"],
+      "score": 4
+    },
+    {
+      "type": "file_suspicious",
+      "check": "extension_mismatch",
+      "score": 2
+    },
+    {
+      "type": "file_suspicious",
+      "check": "size_anomaly",
+      "score": 1
+    },
+    {
+      "type": "signed",
+      "value": true,
+      "score": -3
+    }
+  ]
+}

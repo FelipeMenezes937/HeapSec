@@ -27,6 +27,7 @@ import antivirus.scanner.BoyerMooreStringDetector;
 import antivirus.scanner.DirectoryCache;
 import antivirus.scanner.YaraScanner;
 import antivirus.scanner.ZipExtractor;
+import antivirus.scanner.HeuristicAnalyzer;
 import antivirus.security.PathValidator;
 
 public class AntivirusScanner {
@@ -39,6 +40,7 @@ public class AntivirusScanner {
     private final AntivirusLogger logger;
     private final SandboxExecutor sandboxExecutor;
     private final YaraScanner yaraScanner;
+    private final HeuristicAnalyzer heuristicAnalyzer;
     private final boolean sandboxAvailable;
     private boolean autoDelete = true;
 
@@ -80,6 +82,7 @@ public class AntivirusScanner {
         this.logger = AntivirusLogger.getInstance();
         this.sandboxExecutor = new SandboxExecutor();
         this.yaraScanner = new YaraScanner();
+        this.heuristicAnalyzer = new HeuristicAnalyzer();
         this.sandboxAvailable = sandboxExecutor.getSandboxType() != SandboxExecutor.SandboxType.NATIVE;
         HashCache.init();
         DirectoryCache.init();
@@ -181,7 +184,7 @@ public class AntivirusScanner {
                         false
                     );
                 }
-                List<ScanResult> results = scanDirectory(path.toString(), false, false);
+                List<ScanResult> results = scanDirectory(path.toString(), false);
                 return new ScanResult(
                     path.getFileName().toString(),
                     0,
@@ -260,6 +263,46 @@ public class AntivirusScanner {
 
         logger.info(AntivirusLogger.Category.SCANNER, "Iniciando escaneamento: " + filePath);
 
+        List<String> yaraMatches = yaraScanner.scan(fileData);
+        int yaraScore = yaraScanner.getTotalScore(fileData, 0);
+
+        if (yaraScore > 0) {
+            threats.add("YARA: " + yaraMatches);
+            int score = yaraScore;
+            String threatLevel = getThreatLevel(score);
+
+            boolean quarantined = false;
+            if (autoAction && score >= 20 && !isSystemPath(filePath)) {
+                quarantined = quarantineManager.quarantine(filePath);
+                if (quarantined) {
+                    totalQuarantined++;
+                    threats.add("Arquivo movido para quarentena");
+                    logger.logQuarantine(filePath, "YARA - Score: " + score);
+                }
+            }
+            totalScanned++;
+            logger.logScan(filePath, threatLevel, threats);
+            if (useCache) {
+                HashCache.put(path, threatLevel);
+                HashCache.save();
+            }
+
+            return new ScanResult(
+                fileName,
+                fileData.length,
+                0,
+                List.of(),
+                false,
+                false,
+                threatLevel,
+                score,
+                threats,
+                quarantined,
+                false,
+                score >= 120
+            );
+        }
+
         double entropy = entropyAnalyzer.calculateEntropy(fileData);
 
         List<String> suspiciousStrings = Collections.emptyList();
@@ -279,26 +322,38 @@ public class AntivirusScanner {
         PEAnalysis peAnalysis = peAnalyzer.analyze(fileData);
 
         int score = calculateThreatScore(entropy, suspiciousStrings.size(), doubleExtension, peAnalysis, passwordStealerPatterns.size());
-        
+
         if (fakeFilename) {
             score += 60;
             threats.add("Nome falso detectado!");
         }
-        
+
         if (categoryScore > 0) {
             score += categoryScore;
         }
 
-        List<String> yaraMatches = yaraScanner.scan(fileData);
-        int yaraScore = 0;
-        if (entropy > 6.5) {
-            yaraScore = yaraScanner.getTotalScore(fileData, 40);
+        HeuristicAnalyzer heuristicAnalyzer = new HeuristicAnalyzer();
+        HeuristicAnalyzer.HeuristicResult heuristicResult = heuristicAnalyzer.analyze(fileData, path, fileName);
+        score += heuristicResult.getScore();
+        threats.addAll(heuristicResult.getReasons());
+
+        if (heuristicResult.isSuspicious()) {
+            logger.info(AntivirusLogger.Category.SCANNER, "Arquivo classificado como suspeito - executando sandbox");
+            if (sandboxAvailable) {
+                SandboxExecutor.ExecutionResult sandboxResult = sandboxExecutor.execute(filePath, 30);
+                threats.add("Sandbox: " + sandboxExecutor.getSandboxType());
+                threats.add("Exit code: " + sandboxResult.exitCode);
+                for (String behavior : sandboxResult.behaviors) {
+                    threats.add(behavior);
+                }
+                int sandboxScore = evaluateSandboxBehaviors(sandboxResult.behaviors);
+                score += sandboxScore;
+                logger.logSandbox(filePath, sandboxExecutor.getSandboxType().toString(),
+                    sandboxResult.exitCode, sandboxResult.behaviors.toString());
+                sandboxExecutor.cleanup();
+            }
         }
-        if (yaraScore > 0) {
-            score += yaraScore;
-            threats.add("YARA: " + yaraMatches);
-        }
-        
+
         String threatLevel = getThreatLevel(score);
         threats.addAll(buildThreats(entropy, suspiciousStrings, doubleExtension, peAnalysis, passwordStealerPatterns, category));
 
@@ -431,6 +486,26 @@ public class AntivirusScanner {
         }
     }
 
+    private int evaluateSandboxBehaviors(List<String> behaviors) {
+        int score = 0;
+        for (String behavior : behaviors) {
+            String lower = behavior.toLowerCase();
+            if (lower.contains("process") && lower.contains("created")) {
+                score += 5;
+            }
+            if (lower.contains("connect") || lower.contains("network") || lower.contains("external")) {
+                score += 5;
+            }
+            if (lower.contains("inject") || lower.contains("hook")) {
+                score += 8;
+            }
+            if (lower.contains("persist") || lower.contains("registry") || lower.contains("scheduled")) {
+                score += 6;
+            }
+        }
+        return score;
+    }
+
     private List<String> buildThreats(double entropy, List<String> suspicious, boolean doubleExt, PEAnalysis pe, List<String> passwordStealer, BoyerMooreStringDetector.MalwareCategory category) {
         List<String> threats = new ArrayList<>();
         if (entropy > 7.8) threats.add(String.format("Alta entropia (%.2f)", entropy));
@@ -449,7 +524,7 @@ public class AntivirusScanner {
     }
 
     public List<ScanResult> scanDirectory(String dirPath, boolean autoAction) throws IOException {
-        return scanDirectory(dirPath, autoAction, false);
+        return scanDirectory(dirPath, autoAction, false, true);
     }
 
     private static final String[] SKIP_DIRS = {"/proc", "/sys", "/dev", "/run", "/tmp", "/usr/lib", "/usr/share", "/lib", "/share", "/snap", "/var/cache"};
@@ -510,7 +585,7 @@ public class AntivirusScanner {
 
                 if (batch.size() >= BATCH_SIZE) {
                     long batchStartMs = System.currentTimeMillis();
-                    List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox, useCache);
+                    List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
                     results.addAll(batchResults);
 
                     for (ScanResult r : batchResults) {
@@ -539,7 +614,7 @@ public class AntivirusScanner {
             }
 
              if (!batch.isEmpty()) {
-                 List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox, useCache);
+                 List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
                  results.addAll(batchResults);
 
                  for (ScanResult r : batchResults) {
@@ -740,7 +815,7 @@ public class AntivirusScanner {
         Path path = Path.of(args[0]);
 
         if (Files.isDirectory(path)) {
-            List<ScanResult> results = scanner.scanDirectory(args[0], autoAction, runSandbox);
+            List<ScanResult> results = scanner.scanDirectory(args[0], autoAction, runSandbox, true);
         } else {
             ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox, decompress);
             if (!result.getScore().equals("SEGURO")) {
@@ -808,7 +883,7 @@ public class AntivirusScanner {
                     System.out.print("\033[H\033[2J");
                     System.out.println("\n=== ANTIVIRUS LOGS (ao vivo) ===\n");
                     for (int i = Math.max(0, logs.size() - 20); i < logs.size(); i++) {
-                        System.out.println(logs.get(System.out.println(logs.get(i));
+                        System.out.println(logs.get(i));
                     }
                     System.out.println("\nAguardando...");
                     lastCount = logs.size();
