@@ -47,6 +47,7 @@ public class AntivirusScanner {
     private static int totalScanned = 0;
     private static int totalDeleted = 0;
     private static int totalQuarantined = 0;
+    private static boolean useCache = true;
 
     private static boolean isSystemPath(String path) {
         if (path == null) return false;
@@ -145,7 +146,7 @@ public class AntivirusScanner {
             );
         }
 
-        if (HashCache.isCached(path)) {
+        if (useCache && HashCache.isCached(path)) {
             String cachedResult = HashCache.getCachedResult(path);
             if (cachedResult != null) {
                 return new ScanResult(
@@ -289,7 +290,10 @@ public class AntivirusScanner {
         }
 
         List<String> yaraMatches = yaraScanner.scan(fileData);
-        int yaraScore = yaraScanner.getTotalScore(fileData);
+        int yaraScore = 0;
+        if (entropy > 6.5) {
+            yaraScore = yaraScanner.getTotalScore(fileData, 40);
+        }
         if (yaraScore > 0) {
             score += yaraScore;
             threats.add("YARA: " + yaraMatches);
@@ -344,8 +348,10 @@ public class AntivirusScanner {
         totalScanned++;
 
         logger.logScan(filePath, threatLevel, threats);
-        HashCache.put(path, threatLevel);
-        HashCache.save();
+        if (useCache) {
+            HashCache.put(path, threatLevel);
+            HashCache.save();
+        }
 
         return new ScanResult(
             fileName,
@@ -451,11 +457,11 @@ public class AntivirusScanner {
     private static final String[] KNOWN_SAFE_NAMES = {"libc", "kernel", "system", "boot", "init", "udev", "dbus", "glibc", "gcc", "clang", "llvm", "arduino", "esp-idf", "platformio"};
     private static final String[] SKIP_PATH_CONTAINS = {".gradle", "node_modules", "vendor/bundle", "target/debug", "target/release", ".cargo/registry", ".rustup"};
 
-    private static final int BATCH_SIZE = 1000;
+    private static final int BATCH_SIZE = 100;
     private static final long MIN_SIZE_FOR_PARALLEL = 50 * 1024;
-    private static final int PARALLEL_THRESHOLD = 10;
+    private static final int PARALLEL_THRESHOLD = 5;
 
-    public List<ScanResult> scanDirectory(String dirPath, boolean autoAction, boolean runSandbox) throws IOException {
+    public List<ScanResult> scanDirectory(String dirPath, boolean autoAction, boolean runSandbox, boolean useCache) throws IOException {
         List<ScanResult> results = new ArrayList<>();
         Path basePath = Path.of(dirPath).toAbsolutePath().normalize();
         long startTime = System.currentTimeMillis();
@@ -477,42 +483,81 @@ public class AntivirusScanner {
 
         System.out.println("Escaneando: " + dirPath);
         long totalFiles = 0;
-        int totalBatches = 1;
         
+        int processed = 0;
+        int batchNum = 0;
+        int countSeg = 0, countBaixo = 0, countMedio = 0, countAlto = 0, countCrit = 0;
+        long batchStartTime = startTime;
+        long batchStartRam = 0;
+
         try {
             ProcessBuilder pb = new ProcessBuilder("sh", "-c", 
-                "find '" + dirPath + "' -type f 2>/dev/null");
+                    "find '" + dirPath + "' -type f 2>/dev/null");
             pb.redirectErrorStream(true);
             Process p = pb.start();
             
             java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
             List<Path> batch = new ArrayList<>(BATCH_SIZE);
-            int processed = 0;
-            int batchNum = 0;
             String line;
             
             while ((line = br.readLine()) != null) {
                 Path file = Path.of(line);
                 if (shouldSkip(file)) continue;
-                
+
                 batch.add(file);
                 totalFiles++;
                 processed++;
-                
+
                 if (batch.size() >= BATCH_SIZE) {
-                    List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
+                    long batchStartMs = System.currentTimeMillis();
+                    List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox, useCache);
                     results.addAll(batchResults);
+
+                    for (ScanResult r : batchResults) {
+                        String s = r.getScore();
+                        if (s != null) {
+                            switch (s) {
+                                case "SEGURO" -> countSeg++;
+                                case "BAIXO" -> countBaixo++;
+                                case "MEDIO" -> countMedio++;
+                                case "ALTO" -> countAlto++;
+                                case "CRITICO" -> countCrit++;
+                            }
+                        }
+                    }
                     batchNum++;
+
+                    Runtime rt = Runtime.getRuntime();
+                    long ramMB = (rt.totalMemory() - rt.freeMemory()) / (1024*1024);
+                    long totalElapsed = (System.currentTimeMillis() - startTime) / 1000;
+                    int totalThreats = countBaixo + countMedio + countAlto + countCrit;
+                    System.out.printf("Lote: %02d | Arquivos: %d | Ram: %dMB | Ameacas: %d | Tempo: %ds%n",
+                        batchNum, processed, ramMB, totalThreats, totalElapsed);
+
                     batch.clear();
                 }
             }
-            
-            if (!batch.isEmpty()) {
-                List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
-                results.addAll(batchResults);
-                batchNum++;
-            }
-            
+
+             if (!batch.isEmpty()) {
+                 List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox, useCache);
+                 results.addAll(batchResults);
+
+                 for (ScanResult r : batchResults) {
+                     String s = r.getScore();
+                     if (s != null) {
+                         switch (s) {
+                             case "SEGURO" -> countSeg++;
+                             case "BAIXO" -> countBaixo++;
+                             case "MEDIO" -> countMedio++;
+                             case "ALTO" -> countAlto++;
+                             case "CRITICO" -> countCrit++;
+                         }
+                     }
+                 }
+             }
+
+            System.out.println();
+
             p.waitFor();
             
         } catch (Exception e) {
@@ -523,45 +568,16 @@ public class AntivirusScanner {
         double seconds = elapsedMs / 1000.0;
         double filesPerSec = totalFiles > 0 && seconds > 0 ? totalFiles / seconds : 0;
 
-        int countSeg = 0, countBaixo = 0, countMedio = 0, countAlto = 0, countCrit = 0;
-        int total = results.size();
-        for (ScanResult r : results) {
-            String s = r.getScore();
-            if (s == null) continue;
-            switch (s) {
-                case "SEGURO" -> countSeg++;
-                case "BAIXO" -> countBaixo++;
-                case "MEDIO" -> countMedio++;
-                case "ALTO" -> countAlto++;
-                case "CRITICO" -> countCrit++;
-            }
-        }
+        System.out.println();
+        System.out.println("TEMPO TOTAL: " + String.format("%.1f", seconds) + "s | " + String.format("%.0f", filesPerSec) + " arquivos/s");
+        System.out.println("SEGURO: " + countSeg + " | BAIXO: " + countBaixo + " | MEDIO: " + countMedio + " | ALTO: " + countAlto + " | CRITICO: " + countCrit);
 
-        double pctSeg = total > 0 ? (countSeg / total * 100) : 0;
-        double pctBaixo = total > 0 ? (countBaixo / total * 100) : 0;
-        double pctMedio = total > 0 ? (countMedio / total * 100) : 0;
-        double pctAlto = total > 0 ? (countAlto / total * 100) : 0;
-        double pctCrit = total > 0 ? (countCrit / total * 100) : 0;
-
-        System.out.println("\n");
-        System.out.println("╔══════════════════════════════════════════════════════╗");
-        System.out.println("║           RESULTADO DO ESCANEAMENTO                 ║");
-        System.out.println("╠══════════════════════════════════════════════════════╣");
-        System.out.printf("║  %d arquivos escaneados em %.1fs (%.0f arquivos/s)   %n", totalFiles, seconds, filesPerSec);
-        System.out.println("╠══════════════════════════════════════════════════════╣");
-        System.out.printf("║  SEGURO:    %5d (%.1f%%)                         %n", countSeg, pctSeg);
-        System.out.printf("║  BAIXO:     %5d (%.1f%%)                         %n", countBaixo, pctBaixo);
-        System.out.printf("║  MEDIO:     %5d (%.1f%%)                         %n", countMedio, pctMedio);
-        System.out.printf("║  ALTO:      %5d (%.1f%%)                         %n", countAlto, pctAlto);
-        System.out.printf("║  CRITICO:   %5d (%.1f%%)                         %n", countCrit, pctCrit);
-        System.out.println("╚══════════════════════════════════════════════════════╝");
-
-        if (!results.isEmpty()) {
+        if (totalFiles > 0) {
             int threats = countBaixo + countMedio + countAlto + countCrit;
             String status = threats > 0 ? "AMEACA" : "SEGURO";
             DirectoryCache.markDirectory(dirPath, status);
         }
-        
+
         return results;
     }
 
@@ -673,6 +689,7 @@ public class AntivirusScanner {
                     -w, --watch          Watch logs em tempo real
                     --daemon <path>      Modo daemon (monitoramento)
                     --no-action          Desativar auto-delete
+                    --no-cache           Nao usar cache
                     --sandbox            Executar em sandbox
                     -d, --decompress      Varredura pesada (ZIP/JAR)
 
@@ -680,7 +697,7 @@ public class AntivirusScanner {
                     ./heapsec arquivo.exe
                     ./heapsec /home/felipe/Downloads
                     ./heapsec arquivo.exe --action
-                    ./heapsec -d arquivo.zip
+                    ./heapsec --no-cache /home/felipe/Downloads
                 """);
             return;
         }
@@ -711,26 +728,24 @@ public class AntivirusScanner {
         boolean autoAction = true;
         boolean runSandbox = false;
         boolean decompress = false;
+        useCache = true;
 
         for (int i = 1; i < args.length; i++) {
             if (args[i].equals("--no-action")) autoAction = false;
             else if (args[i].equals("--sandbox")) runSandbox = true;
             else if (args[i].equals("-d") || args[i].equals("--decompress")) decompress = true;
+            else if (args[i].equals("--no-cache")) useCache = false;
         }
 
         Path path = Path.of(args[0]);
 
         if (Files.isDirectory(path)) {
             List<ScanResult> results = scanner.scanDirectory(args[0], autoAction, runSandbox);
-            System.out.println("\n=== RESULTADO DO ESCANEAMENTO ===");
-            System.out.println("Total de amenazas: " + results.size());
-            for (ScanResult r : results) {
-                System.out.println(r);
-                System.out.println("---");
-            }
         } else {
             ScanResult result = scanner.scanFile(args[0], autoAction, runSandbox, decompress);
-            System.out.println(result);
+            if (!result.getScore().equals("SEGURO")) {
+                System.out.println(result.getFileName() + " -> " + result.getScore());
+            }
         }
     }
 
@@ -793,7 +808,7 @@ public class AntivirusScanner {
                     System.out.print("\033[H\033[2J");
                     System.out.println("\n=== ANTIVIRUS LOGS (ao vivo) ===\n");
                     for (int i = Math.max(0, logs.size() - 20); i < logs.size(); i++) {
-                        System.out.println(logs.get(i));
+                        System.out.println(logs.get(System.out.println(logs.get(i));
                     }
                     System.out.println("\nAguardando...");
                     lastCount = logs.size();
@@ -823,16 +838,14 @@ private static void loadBannerFromHome() {
     private static void printMenu() {
         printBanner();
         System.out.println("""
-                [1] scan file
-                [2] scan dir
-                [3] quarantine
-                [4] logs
-                [5] watch
-                [6] monitor background
-                [7] cache
-                [8] stats
-                [9] help
-                [0] quit
+                [1] arquivo     - escanear arquivo
+                [2] diretorio   - escanear diretorio
+                [3] quarantine  - listar quarentena
+                [4] logs        - ver logs
+                [5] watch       -monitorar tempo real
+                [6] cache       - limpar cache
+                [7] help       - ajuda
+                [0] quit       - sair
                 """);
     }
 
@@ -852,70 +865,77 @@ private static void loadBannerFromHome() {
             if (choice.isEmpty()) continue;
 
             switch (choice) {
-                case "1", "file" -> {
-                    System.out.print("Arquivo: ");
-                    String f = input.nextLine().trim();
-                    if (!f.isEmpty()) {
-                        System.out.print("Acao (D)eletar/(Q)uarentenar/(N)ada? (D): ");
-                        String aq = input.nextLine().trim().toLowerCase();
-                        boolean autoAction = !aq.equals("n");
-                        if (aq.equals("q")) scanner.setAutoDelete(false);
-                        else scanner.setAutoDelete(true);
-                        try { System.out.println(scanner.scanFile(f, autoAction, false, false)); } 
-                        catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
-                    }
-                }
-                case "2", "dir" -> {
-                    System.out.print("Diretorio [/home/felipe]: ");
-                    String d = input.nextLine().trim();
-                    if (d.isEmpty()) d = System.getenv("HOME");
-                    else if (!d.startsWith("/")) d = System.getenv("HOME") + "/" + d;
-                    System.out.print("Acao (D)eletar/(Q)uarentenar/(N)ada? (D): ");
-                    String aq = input.nextLine().trim().toLowerCase();
-                    boolean autoAction = !aq.equals("n");
-                    if (aq.equals("q")) scanner.setAutoDelete(false);
-                    else scanner.setAutoDelete(true);
-                    System.out.println("Escaneando: " + d);
-                    try { 
-                        var r = scanner.scanDirectory(d, autoAction, false);
-                        System.out.println("Total: " + r.size() + " arquivos");
-                        int threats = 0;
-                        for (var x : r) {
-                            if (!x.getScore().equals("SEGURO")) {
-                                System.out.println("- " + x.getFileName() + ": " + x.getScore());
-                                threats++;
-                            }
-                        }
-                        System.out.println("Ameacas: " + threats);
-                    } catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
-                }
-                case "3", "q" -> scanner.getQuarantineManager().listQuarantined();
-                case "4", "l" -> AntivirusLogger.getInstance().getLogs().forEach(System.out::println);
-                case "5", "w" -> watchLogs();
-                case "6", "d" -> {
-                    System.out.print("Path [/home/felipe]: ");
-                    String p = input.nextLine().trim();
-                    if (p.isEmpty()) p = System.getenv("HOME");
-                    else if (!p.startsWith("/")) p = System.getenv("HOME") + "/" + p;
-                    System.out.print("Acao (D)eletar/(Q)uarentenar/(N)ada? (D): ");
-                    String aq = input.nextLine().trim().toLowerCase();
-                    boolean autoAction = !aq.equals("n");
-                    if (aq.equals("q")) scanner.setAutoDelete(false);
-                    else scanner.setAutoDelete(true);
-                    System.out.println("Iniciando monitor: " + p);
-                    startDaemon(scanner, p, autoAction);
-                }
-                case "7", "stats" -> AntivirusScanner.printStats();
-                case "8", "cache" -> {
+                 case "1", "file" -> {
+                     System.out.print("Arquivo: ");
+                     String f = input.nextLine().trim();
+                     if (!f.isEmpty()) {
+                         System.out.print("Acao (D)eletar/(Q)uarentenar/(N)ada? (D): ");
+                         String aq = input.nextLine().trim().toLowerCase();
+                         boolean autoAction = !aq.equals("n");
+                         if (aq.equals("q")) scanner.setAutoDelete(false);
+                         else scanner.setAutoDelete(true);
+                         
+                         System.out.print("Usar cache? (S/n): ");
+                         String useCacheInput = input.nextLine().trim().toLowerCase();
+                         boolean useCache = !useCacheInput.equals("n");
+                         
+                         try { 
+                             System.out.println(scanner.scanFile(f, autoAction, false, useCache)); 
+                         } 
+                         catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
+                     }
+                 }
+                 case "2", "dir" -> {
+                     System.out.print("Diretorio [/home/felipe]: ");
+                     String d = input.nextLine().trim();
+                     if (d.isEmpty()) d = System.getenv("HOME");
+                     else if (!d.startsWith("/")) d = System.getenv("HOME") + "/" + d;
+                     System.out.print("Acao (D)eletar/(Q)uarentenar/(N)ada? (D): ");
+                     String aq = input.nextLine().trim().toLowerCase();
+                     boolean autoAction = !aq.equals("n");
+                     if (aq.equals("q")) scanner.setAutoDelete(false);
+                     else scanner.setAutoDelete(true);
+                     
+                     System.out.print("Usar cache? (S/n): ");
+                     String useCacheInput = input.nextLine().trim().toLowerCase();
+                     boolean useCache = !useCacheInput.equals("n");
+                     
+                     System.out.println("Escaneando: " + d);
+                     try { 
+                         var r = scanner.scanDirectory(d, autoAction, false, useCache);
+                         System.out.println("Total: " + r.size() + " arquivos");
+                         int threats = 0;
+                         for (var x : r) {
+                             if (!x.getScore().equals("SEGURO")) {
+                                 System.out.println("- " + x.getFileName() + ": " + x.getScore());
+                                 threats++;
+                             }
+                         }
+                         System.out.println("Ameacas: " + threats);
+                     } catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
+                 }
+                case "3", "quarantine" -> scanner.getQuarantineManager().listQuarantined();
+                case "4", "logs" -> AntivirusLogger.getInstance().getLogs().forEach(System.out::println);
+                case "5", "watch" -> watchLogs();
+                case "6", "cache" -> {
                     System.out.print("Limpar cache? (S/n): ");
                     if (input.nextLine().trim().equalsIgnoreCase("s")) {
                         HashCache.clear();
                         System.out.println("Cache limpo");
                     }
                 }
-                case "9", "h" -> System.out.println("Uso: ./heapsec <arq> | ./heapsec -d <arq> | ./heapsec -l | ./heapsec -w");
+                case "7", "help" -> printMenu();
                 case "0", "quit" -> { return; }
-                default -> {}
+                default -> {
+                    // Try to scan as path
+                    Path p = Path.of(choice);
+                    if (Files.exists(p)) {
+                        try { System.out.println(scanner.scanFile(choice, false, false, false)); } 
+                        catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
+                    } else {
+                        System.out.println("Comando invalido");
+                    }
+                }
             }
         }
     }

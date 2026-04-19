@@ -82,8 +82,7 @@ public class HashCache {
             if (len > 16384) {
                 md.update(data, len - 8192, 8192);
             }
-            bytesToHex(md.digest());
-            return md.digest().toString();
+            return bytesToHex(md.digest());
         } catch (Exception e) {
             return String.valueOf(data.length);
         }

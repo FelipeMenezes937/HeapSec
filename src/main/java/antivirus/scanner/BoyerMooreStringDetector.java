@@ -30,54 +30,51 @@ public class BoyerMooreStringDetector {
     };
 
     private static final String[] PASSWORD_STEALER_PATTERNS = {
-        "password", "passwordfox", "passview", "browserpass", "netpass",
-        "pwdump", "mimikatz", "lazagne", "pony", "stealer", "credential",
-        "logins", "moz_logins", "signons", "encrypted", "decrypt",
-        "firefox", "chrome", "browser", "savedpassword"
+        "passwordfox", "browserpass", "netpass",
+        "pwdump", "mimikatz", "lazagne", "pony", " credential",
+        "moz_logins", "signons", "decrypt",
+        "passview", "stealer"
     };
 
     private static final String[] KEYLOGGER_PATTERNS = {
-        "keylog", "keystroke", "keyboard", "hook", "SetWindowsHookEx",
-        "GetAsyncKeyState", "GetKeyboardState", "WM_KEYDOWN", "WM_CHAR",
-        "SendKeys", "SendMessage"
+        "keylog", "keystroke", "SetWindowsHookEx",
+        "GetAsyncKeyState", "GetKeyboardState"
     };
 
     private static final String[] BANKER_PATTERNS = {
-        "bank", "banking", "transfer", "creditcard", "credit card",
-        "card number", "cvv", "expire", "billing", "account number",
-        "routing number", "iban", "swift", "bitcoin", "btc", "wallet"
+        "online banking", "bank transfer", "creditcard", "cvv",
+        "card number", "account number", "routing number"
     };
 
     private static final String[] RAT_PATTERNS = {
         "rat", "remote administration", "backdoor", "trojan", "njrat",
         "njghost", "asyncrat", "quasar", "remcos", "metasploit", "cobalt",
-        "powershell -nop", "tcpconnect", "reverse shell", "connect back"
+        "tcpconnect", "reverse shell", "connect back"
     };
 
     private static final String[] CRYPTOMINER_PATTERNS = {
-        "cryptonight", "cryptominner", "xmrig", "miner", "minerd",
-        "hashrate", "submit", "stratum", "pool", "coin hive", "coinhive", "crypto"
+        "cryptonight", "xmrig", "minerd",
+        "stratum", "coinhive", "crypto"
     };
 
     private static final String[] DROPPER_PATTERNS = {
-        "dropper", "downloader", "payload", "stager", "download execute",
-        "iEX", "invoke-expression", "wscript", "mshta", "certutil",
-        "bitsadmin", "powershell -e"
+        "dropper", "downloader", "payload", "stager",
+        "wscript", "mshta", "bitsadmin"
     };
 
     private static final String[] SPYWARE_PATTERNS = {
-        "spyware", "surveillance", "monitor", "screenshot", "clipboard",
-        "webcam", "microphone", "record", "dwell", " investigator", "espionage"
+        "spyware", "surveillance", "screenshot",
+        "webcam", "microphone"
     };
 
     private static final String[] BOTNET_PATTERNS = {
-        "botnet", "zombie", "ddos", "amplification", "syn flood",
-        "udp flood", "rooter", "flooder", "bot"
+        "botnet", "zombie", "ddos",
+        "syn flood", "udp flood"
     };
 
     private static final String[] RANSOMWARE_PATTERNS = {
-        "ransom", "encrypted", "your files", "decrypt", "payment", "wallet",
-        "locked files", "restore files", "all files encrypted", "unlock"
+        "ransom", "your files", "decrypt", "payment",
+        "locked files", "all files encrypted"
     };
 
     private static final int SEARCH_LIMIT = 512 * 1024;
@@ -123,15 +120,15 @@ public class BoyerMooreStringDetector {
         int botCount = BOTNET_MATCHER.countMatches(searchData);
         int ranCount = RANSOMWARE_MATCHER.countMatches(searchData);
 
-        if (psCount >= 4) return MalwareCategory.PASSWORD_STEALER;
-        if (ratCount >= 4) return MalwareCategory.RAT;
-        if (ranCount >= 4) return MalwareCategory.RANSOMWARE;
-        if (mineCount >= 4) return MalwareCategory.CRYPTOMINER;
-        if (bankCount >= 5) return MalwareCategory.BANKER;
-        if (klCount >= 4) return MalwareCategory.KEYLOGGER;
-        if (dropCount >= 4) return MalwareCategory.DROPPER;
-        if (spyCount >= 4) return MalwareCategory.SPYWARE;
-        if (botCount >= 4) return MalwareCategory.BOTNET;
+        if (psCount >= 5) return MalwareCategory.PASSWORD_STEALER;
+        if (ratCount >= 5) return MalwareCategory.RAT;
+        if (ranCount >= 5) return MalwareCategory.RANSOMWARE;
+        if (mineCount >= 5) return MalwareCategory.CRYPTOMINER;
+        if (bankCount >= 6) return MalwareCategory.BANKER;
+        if (klCount >= 5) return MalwareCategory.KEYLOGGER;
+        if (dropCount >= 5) return MalwareCategory.DROPPER;
+        if (spyCount >= 5) return MalwareCategory.SPYWARE;
+        if (botCount >= 5) return MalwareCategory.BOTNET;
         return MalwareCategory.UNKNOWN;
     }
 
