@@ -42,9 +42,28 @@ public class AntivirusScanner {
     private final boolean sandboxAvailable;
     private boolean autoDelete = true;
 
+    private static String[] PROTECTED_PREFIXES = null;
+
     private static int totalScanned = 0;
     private static int totalDeleted = 0;
     private static int totalQuarantined = 0;
+
+    private static boolean isSystemPath(String path) {
+        if (path == null) return false;
+        if (PROTECTED_PREFIXES == null) {
+            PROTECTED_PREFIXES = new String[]{
+                System.getProperty("user.home") + "/antivirus",
+                "/home/felipe/antivirus",
+                "/home/felipe/antivirus/src",
+                "/home/felipe/antivirus/out"
+            };
+        }
+        path = path.replace("\\", "/");
+        for (String prefix : PROTECTED_PREFIXES) {
+            if (path.startsWith(prefix.replace("\\", "/"))) return true;
+        }
+        return false;
+    }
 
     public AntivirusScanner() {
         this(true);
@@ -298,7 +317,7 @@ public class AntivirusScanner {
         }
 
         if (autoAction && score >= 20) {
-            if (autoDelete) {
+            if (!isSystemPath(filePath) && autoDelete) {
                 quarantined = quarantineManager.delete(filePath);
                 if (quarantined) {
                     totalDeleted++;
@@ -314,7 +333,7 @@ public class AntivirusScanner {
                 }
             }
             
-            if (score >= 80) {
+            if (score >= 80 && !isSystemPath(filePath)) {
                 processKilled = processKiller.killByPath(filePath);
                 if (processKilled) {
                     threats.add("Processo encerrado");
@@ -481,8 +500,6 @@ public class AntivirusScanner {
                 processed++;
                 
                 if (batch.size() >= BATCH_SIZE) {
-                    printProgress(processed, results.size());
-                    
                     List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
                     results.addAll(batchResults);
                     batchNum++;
@@ -491,13 +508,11 @@ public class AntivirusScanner {
             }
             
             if (!batch.isEmpty()) {
-                printProgress(processed, results.size());
                 List<ScanResult> batchResults = scanBatch(batch, autoAction, runSandbox);
                 results.addAll(batchResults);
                 batchNum++;
             }
             
-            printProgress(processed, results.size());
             p.waitFor();
             
         } catch (Exception e) {
