@@ -1,59 +1,18 @@
 #!/bin/bash
-# HeapSec - Scanner antivírus
+# Simple runner for HeapSec Antivirus
 
-CP="$(cd "$(dirname "$0")" && pwd)/out/classes:$(cd "$(dirname "$0")" && pwd)/resources"
-
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    echo "HeapSec - Antivírus Local"
-    echo ""
-    echo "Uso: heapsec [opção]"
-    echo ""
-    echo "Opções:"
-    echo "  (vazio)    Menu interativo"
-    echo "  <path>    Escanear arquivo ou diretório"
-    echo "  -m <path> Monitor (não-loop, varre uma vez)"
-    echo "  -D <path> Daemon (background, monitora em tempo real)"
-    echo "  -l        Ver logs"
-    echo "  -w        Watch logs (tempo real)"
-    echo "  -h        Esta ajuda"
-    echo ""
-    echo "Exemplos:"
-    echo "  heapsec                    # menu"
-    echo "  heapsec Downloads/          # escaneia diretório"
-    echo "  heapsec -m Downloads/      # monitor varredura única"
-    echo "  heapsec -D Downloads/     # daemon background"
-    echo "  heapsec -l                # ver logs"
-    exit 0
+# Compile if needed
+if [ ! -d "out/classes" ] || [ src/main/java -nt out/classes ]; then
+    echo "Compiling HeapSec Antivirus..."
+    mkdir -p out/classes
+    javac -d out/classes --source-path src/main/java src/main/java/antivirus/*.java src/main/java/antivirus/*/*.java
+    if [ $? -ne 0 ]; then
+        echo "Compilation failed!"
+        exit 1
+    fi
+    echo "Compilation successful!"
 fi
 
-if [ "$1" = "-l" ]; then
-    java -cp "$CP" antivirus.AntivirusScanner -l
-    exit 0
-fi
-
-if [ "$1" = "-w" ]; then
-    java -cp "$CP" antivirus.AntivirusScanner -w
-    exit 0
-fi
-
-if [ "$1" = "-m" ]; then
-    shift
-    java -cp "$CP" antivirus.monitor.ProcessMonitor "$@"
-    exit 0
-fi
-
-if [ "$1" = "-D" ]; then
-    shift
-    echo "Iniciando daemon em background..."
-    nohup java -cp "$CP" antivirus.AntivirusScanner --daemon "$@" > ~/.heapsec/daemon.log 2>&1 &
-    echo "Daemon iniciado! PID: $!"
-    echo "Logs: tail -f ~/.heapsec/daemon.log"
-    exit 0
-fi
-
-if [ -z "$1" ]; then
-    java -cp "$CP" antivirus.AntivirusScanner
-    exit 0
-fi
-
-java -cp "$CP" antivirus.AntivirusScanner "$@"
+# Run the antivirus
+echo "Starting HeapSec Antivirus..."
+java -cp out/classes antivirus.AntivirusScanner "$@"
