@@ -8,6 +8,12 @@ import java.util.List;
 public class ProcessKiller {
 
     public boolean killByPath(String filePath) {
+        String home = System.getProperty("user.home");
+        if (filePath.contains("/antivirus/") || filePath.contains(home + "/antivirus")) {
+            System.err.println("[BLOQUEADO] Tentativa de kill processo do sistema: " + filePath);
+            return false;
+        }
+        
         try {
             String absPath = new java.io.File(filePath).getAbsolutePath();
             List<Integer> pids = findProcessByPath(absPath);

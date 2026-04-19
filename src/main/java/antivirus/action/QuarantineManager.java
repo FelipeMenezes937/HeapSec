@@ -113,6 +113,13 @@ public class QuarantineManager {
     public boolean delete(String filePath) {
         try {
             Path source = Path.of(filePath).toAbsolutePath().normalize();
+            String fullPath = source.toString();
+
+            String home = System.getProperty("user.home");
+            if (fullPath.contains("/antivirus/") || fullPath.contains(home + "/antivirus")) {
+                System.err.println("[BLOQUEADO] Tentativa de deletar arquivo do sistema: " + filePath);
+                return false;
+            }
 
             if (!validateSource(source)) {
                 return false;
