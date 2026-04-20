@@ -67,35 +67,29 @@ graph LR
 
 ---
 
-## Instalação
+## Instalação em 5 segundos
 
-### Pré-requisitos
-- Linux x86_64 (Ubuntu 20.04+, Debian 11+)
-- 512MB RAM disponível
-- Permissões de root (para acesso a quarentena system-wide)
-
-### Instalação via .deb (Recomendado)
+###快速 (Sem instalar)
 
 ```bash
-# Download do binário nativo compilado
-wget [https://github.com/FelipeMenezes937/heapsec/releases/download/v1.1.0/heapsec_1.1.0_amd64.deb](https://github.com/FelipeMenezes937/HeapSec.git)
-
-# Instalação
-sudo dpkg -i heapsec_1.1.0_amd64.deb
-sudo apt-get install -f  # dependências se necessário
-
-# Verificação
-heapsec --version  # HeapSec v1.1.0 (GraalVM Native)
-```
-
-### Build do Source (Opcional)
-
-```bash
-# Requer Maven 3.9+ e GraalVM 21
 git clone https://github.com/FelipeMenezes937/heapsec.git
 cd heapsec
-mvn clean package -Pnative
-sudo dpkg -i target/heapsec_1.1.0_amd64.deb
+./heapsec.sh
+```
+
+### Instalação permanente
+
+```bash
+git clone https://github.com/FelipeMenezes937/heapsec.git
+cd heapsec
+./install.sh
+heapsec  # Pronto!
+```
+
+### Desinstalar
+
+```bash
+./install.sh --uninstall
 ```
 
 ---
