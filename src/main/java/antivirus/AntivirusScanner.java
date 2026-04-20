@@ -262,6 +262,23 @@ public class AntivirusScanner {
 
         logger.info(AntivirusLogger.Category.SCANNER, "Iniciando escaneamento: " + filePath);
 
+        if (entropyAnalyzer.isKnownSafeMagic(fileData)) {
+            return new ScanResult(
+                fileName,
+                fileData.length,
+                0,
+                List.of(),
+                false,
+                false,
+                "SEGURO",
+                0,
+                List.of("Magic bytes: arquivo known-safe"),
+                false,
+                false,
+                false
+            );
+        }
+
         List<String> yaraMatches = yaraScanner.scan(fileData);
         int yaraScore = yaraScanner.getTotalScore(fileData, 0);
 
