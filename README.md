@@ -4,11 +4,10 @@
 
 #  HeapSec Antivirus
 
-**Motor heurístico de análise estática de malware**  
-*Java 21 • GraalVM AOT • Arquitetura multicore*
+**Scanner antivírus local por análise estática**  
+*Java 11+ • Scripts Shell • Zero dependências*
 
-[![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=java)](https://openjdk.org/projects/jdk/21/)
-[![GraalVM](https://img.shields.io/badge/GraalVM-Native%20Image-1F1E37?logo=oracle)](https://www.graalvm.org/)
+[![Java](https://img.shields.io/badge/Java-11+-ED8B00?logo=java)](https://openjdk.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Performance](https://img.shields.io/badge/Velocidade-1.8k%20arquivos%2Fs-blue)]()
 
@@ -25,7 +24,7 @@ implementa técnicas avançadas de detecção heurística sem dependência de cl
 
 **Diferenciais técnicos:**
 -  **Múltiplos motores de análise**: Entropia Shannon, pattern matching Aho-Corasick, parsing PE nativo
--  **Alta performance**: Processamento paralelo com ForkJoinPool Java 21
+-  **Alta performance**: Processamento paralelo com ForkJoinPool
 -  **Segurança defensiva**: Validação rigorosa de paths, proteção contra symlink attacks e zip bombs
 -  **Zero dependências externas**: Funciona offline, sem banco de dados em cloud
 
@@ -49,11 +48,11 @@ graph LR
     H --> I[Quarantine/Report]
 ```
 
-**Por que Java 21 com GraalVM AOT?**
-- **Startup <100ms**: Binary nativo compilado com GraalVM Native Image elimina warmup da JVM
-- **Memory efficiency**: Consumo de ~400MB vs 1GB+ em JVM tradicional
-- **Virtual Threads**: Suporte nativo a milhares de tarefas concorrentes sem criar threads do SO
-- **Panama API**: Acesso eficiente a estruturas nativas (PE headers) sem JNI complexo
+**Por que Java sem dependências?**
+- **Zero setup**: Apenas Java 11+ (qualquer JVM serve)
+- **Portável**: Funciona em qualquer Linux com Java
+- **Simples**: Scripts shell para compilar e rodar
+- **Offline**: Não requer internet nem cloud
 
 ### Componentes Core
 
@@ -69,7 +68,11 @@ graph LR
 
 ## Instalação em 5 segundos
 
-###快速 (Sem instalar)
+### Pré-requisitos
+- Java 11+ (OpenJDK, Azul Zulu, etc)
+- Linux
+
+### Modo rápido (sem instalar)
 
 ```bash
 git clone https://github.com/FelipeMenezes937/heapsec.git
@@ -83,7 +86,7 @@ cd heapsec
 git clone https://github.com/FelipeMenezes937/heapsec.git
 cd heapsec
 ./install.sh
-heapsec  # Pronto!
+heapsec  # Menu interativo!
 ```
 
 ### Desinstalar
