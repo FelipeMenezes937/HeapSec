@@ -940,42 +940,39 @@ private static void loadBannerFromHome() {
             if (choice.isEmpty()) continue;
 
             switch (choice) {
-                 case "1", "file" -> {
-                     System.out.print("Arquivo: ");
-                     String f = input.nextLine().trim();
-                     if (!f.isEmpty()) {
-                         System.out.print("Acao (D)eletar/(Q)uarentenar/(N)ada? (D): ");
-                         String aq = input.nextLine().trim().toLowerCase();
-                         boolean autoAction = !aq.equals("n");
-                         if (aq.equals("q")) scanner.setAutoDelete(false);
-                         else scanner.setAutoDelete(true);
+case "1", "file" -> {
+                      System.out.print("Arquivo: ");
+                      String f = input.nextLine().trim();
+                      if (!f.isEmpty()) {
+                          System.out.print("Deseja varrer com DELETE ativo? (S/N): ");
+                          String aq = input.nextLine().trim().toLowerCase();
+                          boolean autoAction = aq.equals("s");
 
-                         System.out.print("Usar cache? (S/n): ");
-                         String useCacheInput = input.nextLine().trim().toLowerCase();
-                         boolean useCache = !useCacheInput.equals("n");
+                          System.out.print("Deseja varrer com cache ativo? (s/n): ");
+                          String useCacheInput = input.nextLine().trim().toLowerCase();
+                          boolean useCache = !useCacheInput.equals("n");
 
-                         try {
-                             System.out.println(scanner.scanFile(f, autoAction, false, useCache));
-                         }
-                         catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
-                     }
-                 }
-                 case "2", "dir" -> {
-                     System.out.print("Diretorio: ");
-                     String d = input.nextLine().trim();
-                     if (d.isEmpty()) d = System.getenv("HOME");
-                     else if (!d.startsWith("/")) d = System.getenv("HOME") + "/" + d;
-                     System.out.print("Acao (D)eletar/(Q)uarentenar/(N)ada? (D): ");
-                     String aq = input.nextLine().trim().toLowerCase();
-                     boolean autoAction = !aq.equals("n");
-                     if (aq.equals("q")) scanner.setAutoDelete(false);
-                     else scanner.setAutoDelete(true);
+                          try {
+                              System.out.println(scanner.scanFile(f, autoAction, false, useCache));
+                          }
+                          catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
+                      }
+                  }
+case "2", "dir" -> {
+                      System.out.print("Diretorio: ");
+                      String d = input.nextLine().trim();
+                      if (d.isEmpty()) d = System.getenv("HOME");
+                      else if (!d.startsWith("/")) d = System.getenv("HOME") + "/" + d;
 
-                     System.out.print("Usar cache? (S/n): ");
-                     String useCacheInput = input.nextLine().trim().toLowerCase();
-                     boolean useCache = !useCacheInput.equals("n");
+                      System.out.print("Deseja varrer com DELETE ativo? (S/N): ");
+                      String aq = input.nextLine().trim().toLowerCase();
+                      boolean autoAction = aq.equals("s");
 
-                     System.out.println("Escaneando: " + d);
+                      System.out.print("Deseja varrer com cache ativo? (s/n): ");
+                      String useCacheInput = input.nextLine().trim().toLowerCase();
+                      boolean useCache = !useCacheInput.equals("n");
+
+                      System.out.println("Escaneando: " + d);
                      try {
                          var r = scanner.scanDirectory(d, autoAction, false, useCache);
                          System.out.println("Total: " + r.size() + " arquivos");
@@ -1019,6 +1016,14 @@ private static void loadBannerFromHome() {
     }
 
     private static void runFullScan(AntivirusScanner scanner, Scanner input) {
+        System.out.print("Deseja varrer com DELETE ativo? (S/N): ");
+        String aq = input.nextLine().trim().toLowerCase();
+        boolean autoAction = aq.equals("s");
+
+        System.out.print("Deseja varrer com cache ativo? (s/n): ");
+        String useCacheInput = input.nextLine().trim().toLowerCase();
+        boolean useCache = !useCacheInput.equals("n");
+
         String home = System.getProperty("user.home");
         String[] scanPaths = {
             home + "/Documentos",
@@ -1040,7 +1045,7 @@ private static void loadBannerFromHome() {
             if (Files.exists(p) && Files.isDirectory(p)) {
                 System.out.println("Escaneando: " + dir);
                 try {
-                    var results = scanner.scanDirectory(dir, false, false, true);
+                    var results = scanner.scanDirectory(dir, autoAction, false, useCache);
                     int threats = 0;
                     for (var r : results) {
                         if (!r.getScore().equals("SEGURO")) {
