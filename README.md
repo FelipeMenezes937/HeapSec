@@ -266,12 +266,14 @@ src/
 ### Testes
 
 ```bash
-# Testes unitários
-mvn test
+# Rodar testes unitários
+./heapsec.sh --test
+# ou
+java -cp out/classes antivirus.HeapSecTest
 
-# Teste com amostra EICAR (padrão antivirus industry)
+# Teste manual com EICAR (padrão antivirus industry)
 echo 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > test.txt
-heapsec test.txt  # Deve detectar como CRÍTICO
+./heapsec.sh test.txt  # Deve detectar como CRÍTICO
 ```
 
 ---

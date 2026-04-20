@@ -14,4 +14,11 @@ if [ ! -d "$CLASSES_DIR" ]; then
     fi
 fi
 
-exec java -cp "$CLASSES_DIR" antivirus.AntivirusScanner "$@"
+case "$1" in
+    --test|-t)
+        exec java -cp "$CLASSES_DIR" antivirus.HeapSecTest "${@:2}"
+        ;;
+    *)
+        exec java -cp "$CLASSES_DIR" antivirus.AntivirusScanner "$@"
+        ;;
+esac
