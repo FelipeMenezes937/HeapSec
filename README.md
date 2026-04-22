@@ -124,7 +124,7 @@ O menu interativo oferece controle granular sobre ações:
 
 ```text
 ╔════════════════════════════════════════╗
-║         HeapSec v1.1.0               ║
+║         HeapSec v1.1.0                 ║
 ╠════════════════════════════════════════╣
 ║  [1] Escanear diretório                ║
 ║  [2] Escanear arquivo específico       ║
@@ -149,15 +149,15 @@ Classificação baseada em pesos heurísticos:
 
 | Score | Classificação | Ação Recomendada | Exemplo |
 |-------|--------------|------------------|---------|
-| 0-19 | ✅ **SEGURO** | Ignorar | Binários compilados normais |
-| 20-54 | ⚠️ **BAIXO** | Monitorar | Packers comerciais legítimos |
-| 55-84 | 🔶 **MÉDIO** | Quarentena | Ferramentas de administração remota |
-| 85-119 | 🔴 **ALTO** | Quarentena imediata | Droppers conhecidos, keyloggers |
-| 120+ | 🚨 **CRÍTICO** | Remoção automática | Ransomware, wipers |
+| 0-19 |  **SEGURO** | Ignorar | Binários compilados normais |
+| 20-54 |  **BAIXO** | Monitorar | Packers comerciais legítimos |
+| 55-84 |  **MÉDIO** | Quarentena | Ferramentas de administração remota |
+| 85-119 |  **ALTO** | Quarentena imediata | Droppers conhecidos, keyloggers |
+| 120+ | **CRÍTICO** | Remoção automática | Ransomware, wipers |
 
 ---
 
-## 📊 Performance & Benchmarks
+## Performance & Benchmarks
 
 Testado em AMD Ryzen 5 5600X, SSD NVMe:
 
@@ -176,7 +176,7 @@ Testado em AMD Ryzen 5 5600X, SSD NVMe:
 
 ---
 
-## 🔍 Capacidades de Detecção
+## Capacidades de Detecção
 
 ### Heurísticas Implementadas
 
@@ -203,7 +203,7 @@ Testado em AMD Ryzen 5 5600X, SSD NVMe:
 
 ---
 
-## 🛡️ Segurança & Hardening
+## Segurança & Hardening
 
 O scanner implementa defesas contra técnicas de evasão:
 
@@ -250,7 +250,7 @@ Limitações conhecidas:
 
 ---
 
-## 🛠️ Desenvolvimento
+## Desenvolvimento
 
 ```bash
 # Estrutura de diretórios
@@ -289,8 +289,6 @@ MIT License - veja [LICENSE](LICENSE) para detalhes.
 <div align="center">
 
 **[⬆ Voltar ao topo](#-heapsec-antivirus)**
-
-*Desenvolvido com ☕ e 🔍 para a comunidade de segurança*
 
 </div>
 ```
