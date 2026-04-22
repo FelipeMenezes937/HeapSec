@@ -19,7 +19,7 @@
 
 ##  Visão Geral
 
-HeapSec é um scanner antivírus 100% local projetado para análise estática de alta performance em ambientes Linux. Desenvolvido como projeto de pesquisa em segurança ofensiva/defensiva, 
+HeapSec é um scanner antivírus 100% local projetado para análise estática de alta performance em ambientes Linux e Windows. Desenvolvido como projeto de pesquisa em segurança ofensiva/defensiva, 
 implementa técnicas avançadas de detecção heurística sem dependência de cloud ou APIs externas.
 
 **Diferenciais técnicos:**
@@ -70,7 +70,7 @@ graph LR
 
 ### Pré-requisitos
 - Java 11+ (OpenJDK, Azul Zulu, etc)
-- Linux
+- Linux ou Windows (com Git Bash, WSL ou CMD/PowerShell)
 
 ### Modo rápido (sem instalar)
 
@@ -242,7 +242,7 @@ críticos.**
 
 Limitações conhecidas:
 -  **Análise estática apenas**: Não executa sandboxing dinâmico (behavioral analysis)
--  **Linux only**: Sem suporte a Windows (PE analysis funciona cross-platform, mas quarentena é Linux-specific)
+-  **Funciona em Linux e Windows** (com adaptação mínima no installer para Windows)
 -  **False Positives possíveis**: Ferramentas legítimas de administração remota (PsExec, etc) podem ser sinalizadas
 -  **Sem motor comportamental**: Não monitora chamadas de API em tempo real
 
