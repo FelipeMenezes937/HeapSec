@@ -66,29 +66,20 @@ public class ScanResult {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("┌─────────────────────────────────┐\n");
-        sb.append("│  SCAN RESULT                    │\n");
-        sb.append("├─────────────────────────────────┤\n");
-        sb.append("│ name: ").append(fileName).append("\n");
-        sb.append("│ size: ").append(formatSize(size)).append("\n");
-        sb.append("│ entropy: ").append(String.format("%.2f", entropy)).append("\n");
-        sb.append("├─────────────────────────────────┤\n");
+        sb.append("=== SCAN RESULT ===\n");
+        sb.append("name: ").append(fileName).append("\n");
+        sb.append("size: ").append(formatSize(size)).append("\n");
+        sb.append("entropy: ").append(String.format("%.2f", entropy)).append("\n");
         
         String badge = getBadge();
-        sb.append("│ status: ").append(badge).append("\n");
+        sb.append("status: ").append(badge).append("\n");
         
         if (!threats.isEmpty()) {
-            sb.append("├─────────────────────────────────┤\n");
-            sb.append("│ threats:                        │\n");
+            sb.append("threats:\n");
             for (String t : threats) {
-                if (t.length() > 30) {
-                    sb.append("│   • ").append(t.substring(0, 27)).append("... │\n");
-                } else {
-                    sb.append("│   • ").append(t).append("\n");
-                }
+                sb.append("  - ").append(t).append("\n");
             }
         }
-        sb.append("└─────────────────────────────────┘\n");
         return sb.toString();
     }
     

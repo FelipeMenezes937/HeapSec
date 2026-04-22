@@ -30,7 +30,7 @@ public class PEAnalyzer {
     private boolean isValidPE(byte[] data) {
         if (data.length < 2) return false;
         
-        if (data[0] != 0x4D || data[1] != 0x51) {
+        if (data[0] != 0x4D || data[1] != 0x5A) {
             return false;
         }
 
