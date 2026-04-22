@@ -105,7 +105,11 @@ public class QuarantineManager {
             logAction(fileName, quarantinedName);
             return true;
         } catch (IOException e) {
-            System.err.println("Erro ao mover para quarentena: " + e.getMessage());
+            if (e instanceof java.nio.file.AccessDeniedException) {
+                System.err.println("[!] Erro de permissao ao mover para quarentena: " + filePath);
+            } else {
+                System.err.println("[!] Erro ao mover para quarentena: " + e.getMessage());
+            }
             return false;
         }
     }
