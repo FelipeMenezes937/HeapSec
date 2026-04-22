@@ -18,8 +18,16 @@ import antivirus.security.PathValidator;
  */
 public class QuarantineManager {
 
-    /** Diretorio onde ficarao os arquivos em quarentena */
-    private static final String QUARANTINE_DIR = System.getProperty("user.home") + "/.antivirus/quarantine";
+    private static String getQuarantineDir() {
+        String os = System.getProperty("os.name").toLowerCase();
+        String home = System.getProperty("user.home");
+        if (os.contains("windows")) {
+            return home + "\\.antivirus\\quarantine";
+        }
+        return home + "/.antivirus/quarantine";
+    }
+
+    private static final String QUARANTINE_DIR = getQuarantineDir();
 
     /**
      * Construtor - cria o diretorio de quarentena se nao existir.
@@ -120,7 +128,9 @@ public class QuarantineManager {
             String fullPath = source.toString();
 
             String home = System.getProperty("user.home");
-            if (fullPath.contains("/antivirus/") || fullPath.contains(home + "/antivirus")) {
+            String os = System.getProperty("os.name").toLowerCase();
+            if (fullPath.contains("/antivirus/") || fullPath.contains(home + "/antivirus") ||
+                fullPath.contains("\\antivirus\\") || fullPath.contains(home + "\\antivirus")) {
                 System.err.println("[BLOQUEADO] Tentativa de deletar arquivo do sistema: " + filePath);
                 return false;
             }

@@ -9,13 +9,16 @@ public class ProcessKiller {
 
     public boolean killByPath(String filePath) {
         String home = System.getProperty("user.home");
-        if (filePath.contains("/antivirus/") || filePath.contains(home + "/antivirus")) {
+        String os = System.getProperty("os.name").toLowerCase();
+        boolean isWindows = os.contains("windows");
+        String safeDir = isWindows ? home + "\\antivirus" : home + "/antivirus";
+        String absPath = new java.io.File(filePath).getAbsolutePath();
+        if (absPath.contains(safeDir)) {
             System.err.println("[BLOQUEADO] Tentativa de kill processo do sistema: " + filePath);
             return false;
         }
         
         try {
-            String absPath = new java.io.File(filePath).getAbsolutePath();
             List<Integer> pids = findProcessByPath(absPath);
             
             boolean killed = false;
