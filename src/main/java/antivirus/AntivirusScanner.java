@@ -28,6 +28,7 @@ import antivirus.scanner.DirectoryCache;
 import antivirus.scanner.YaraScanner;
 import antivirus.scanner.ZipExtractor;
 import antivirus.scanner.HeuristicAnalyzer;
+import antivirus.scanner.SteganographyAnalyzer;
 import antivirus.security.PathValidator;
 
 public class AntivirusScanner {
@@ -41,6 +42,7 @@ public class AntivirusScanner {
     private final SandboxExecutor sandboxExecutor;
     private final YaraScanner yaraScanner;
     private final HeuristicAnalyzer heuristicAnalyzer;
+    private final SteganographyAnalyzer steganographyAnalyzer;
     private final boolean sandboxAvailable;
     private boolean autoDelete = true;
 
@@ -82,6 +84,7 @@ public class AntivirusScanner {
         this.sandboxExecutor = new SandboxExecutor();
         this.yaraScanner = new YaraScanner();
         this.heuristicAnalyzer = new HeuristicAnalyzer();
+        this.steganographyAnalyzer = new SteganographyAnalyzer();
         this.sandboxAvailable = sandboxExecutor.getSandboxType() != SandboxExecutor.SandboxType.NATIVE;
         HashCache.init();
         DirectoryCache.init();
@@ -338,6 +341,13 @@ public class AntivirusScanner {
         PEAnalysis peAnalysis = peAnalyzer.analyze(fileData);
 
         int score = calculateThreatScore(entropy, suspiciousStrings.size(), doubleExtension, peAnalysis, passwordStealerPatterns.size());
+
+        SteganographyAnalyzer.SteganographyResult stegResult = steganographyAnalyzer.analyze(fileData, fileName);
+        if (stegResult.isDetected()) {
+            score += stegResult.getScore();
+            threats.add("[DETECTADO] esteganografia detectada no arquivo " + fileName);
+            logger.info(AntivirusLogger.Category.SCANNER, "Steganography: " + stegResult.getMethods() + " - " + fileName);
+        }
 
         if (fakeFilename) {
             score += 60;
