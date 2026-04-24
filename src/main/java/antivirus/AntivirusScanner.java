@@ -1001,6 +1001,7 @@ public class AntivirusScanner {
     }
 
     private static EntropyAnalyzer daemonEntropy = new EntropyAnalyzer();
+    private static YaraScanner daemonYara = new YaraScanner();
 
     private static DaemonScanResult analyzeFileDaemon(Path path, String fileName) {
         DaemonScanResult result = new DaemonScanResult();
@@ -1025,6 +1026,16 @@ public class AntivirusScanner {
             if (result.executable) {
                 result.score += scanForScriptPatterns(data);
                 if (result.score >= 20) result.threat = true;
+            }
+
+            List<String> yaraMatches = daemonYara.scan(data);
+            int yaraScore = daemonYara.getTotalScore(data, 0);
+            if (yaraScore > 0) {
+                result.score += yaraScore;
+                result.threat = true;
+                for (String m : yaraMatches) {
+                    result.reasons.add("YARA: " + m);
+                }
             }
 
             double entropy = daemonEntropy.calculateEntropy(data);
