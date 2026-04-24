@@ -1,0 +1,37 @@
+HeapSec Antivirus
+Copyright (c) 2024 Felipe Menezes
+
+Este software é código aberto (open source) sob licença MIT.
+
+---
+
+RECURSOS DE TERCEIROS
+==================
+
+Este software utiliza as seguintes bibliotecas de terceiros:
+
+- Nenhuma dependência externa (zero-dependencies)
+
+---
+
+AVISOS
+=====
+
+1. Este é um projeto EDUCACIONAL e de PESQUISA em segurança.
+2. NÃO deve ser usado como única solução de segurança em ambientes críticos.
+3. Analyses arquivos podem ser potencialmente perigosos - use em VM isolada.
+4. O autor não se responsabiliza por danos causados pelo uso deste software.
+5. Sempre verifique heurísticas com antivírus estabelecidos (ClamAV, etc).
+
+---
+
+THIRD-PARTY NOTICES
+================
+
+This software is open source under MIT license.
+
+1. This is an EDUCATIONAL and RESEARCH project in security.
+2. Should NOT be used as the sole security solution in critical environments.
+3. Analyzing files can be potentially dangerous - use in isolated VM.
+4. The author is not liable for any damages caused by using this software.
+5. Always verify heuristics with established antivirus (ClamAV, etc).
