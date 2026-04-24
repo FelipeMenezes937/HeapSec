@@ -128,12 +128,24 @@ public class SteganographyAnalyzer {
             }
         } else if (isPNG(data)) {
             int endIdx = findPNGEndMarker(data);
-            if (endIdx > 0 && endIdx + 12 < data.length) {
-                for (int j = endIdx + 12; j < data.length; j++) {
-                    if (data[j] != 0x00) {
-                        return EOF_ANOMALY_SCORE;
+            if (endIdx > 0) {
+                int chunkLength = ((data[endIdx - 4] & 0xFF) << 24) |
+                                  ((data[endIdx - 3] & 0xFF) << 16) |
+                                  ((data[endIdx - 2] & 0xFF) << 8) |
+                                  (data[endIdx - 1] & 0xFF);
+                int iendEnd = endIdx + 4 + 4;
+                if (iendEnd < data.length) {
+                    for (int j = iendEnd; j < data.length; j++) {
+                        if (data[j] != 0x00) {
+                            return EOF_ANOMALY_SCORE;
+                        }
                     }
                 }
+                if (chunkLength != 0) {
+                    return EOF_ANOMALY_SCORE;
+                }
+            } else {
+                return EOF_ANOMALY_SCORE;
             }
         } else if (isPDF(data)) {
             for (int i = data.length - 9; i >= 0; i--) {

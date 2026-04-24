@@ -265,7 +265,9 @@ public class AntivirusScanner {
 
         logger.info(AntivirusLogger.Category.SCANNER, "Iniciando escaneamento: " + filePath);
 
-        if (entropyAnalyzer.isKnownSafeMagic(fileData)) {
+        SteganographyAnalyzer.SteganographyResult stegResult = steganographyAnalyzer.analyze(fileData, fileName);
+
+        if (entropyAnalyzer.isKnownSafeMagic(fileData) && !stegResult.isDetected()) {
             return new ScanResult(
                 fileName,
                 fileData.length,
@@ -288,6 +290,10 @@ public class AntivirusScanner {
         if (yaraScore > 0) {
             threats.add("YARA: " + yaraMatches);
             int score = yaraScore;
+            if (stegResult.isDetected()) {
+                score += stegResult.getScore();
+                threats.add("[DETECTADO] esteganografia: " + stegResult.getMethods());
+            }
             String threatLevel = getThreatLevel(score);
 
             boolean quarantined = false;
@@ -342,7 +348,6 @@ public class AntivirusScanner {
 
         int score = calculateThreatScore(entropy, suspiciousStrings.size(), doubleExtension, peAnalysis, passwordStealerPatterns.size());
 
-        SteganographyAnalyzer.SteganographyResult stegResult = steganographyAnalyzer.analyze(fileData, fileName);
         if (stegResult.isDetected()) {
             score += stegResult.getScore();
             threats.add("[DETECTADO] esteganografia detectada no arquivo " + fileName);
@@ -977,10 +982,10 @@ case "1", "file" -> {
 
                           System.out.print("Deseja varrer com cache ativo? (s/n): ");
                           String useCacheInput = input.nextLine().trim().toLowerCase();
-                          boolean useCache = !useCacheInput.equals("n");
+                          AntivirusScanner.useCache = !useCacheInput.equals("n");
 
                           try {
-                              System.out.println(scanner.scanFile(f, autoAction, false, useCache));
+                              System.out.println(scanner.scanFile(f, autoAction));
                           }
                           catch (Exception e) { System.out.println("Erro: " + e.getMessage()); }
                       }
