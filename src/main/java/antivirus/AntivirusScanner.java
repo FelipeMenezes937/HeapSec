@@ -1009,7 +1009,12 @@ public class AntivirusScanner {
 
         try {
             byte[] data = Files.readAllBytes(path);
-            result.executable = isExecutable(data, lowerName);
+            boolean isValidPe = isExecutable(data, lowerName);
+
+            if (lowerName.endsWith(".exe") && !isValidPe) {
+                result.score += 50;
+                result.reasons.add("Extensao .exe sem header PE valido - possivel malware");
+            }
 
             if (isDoubleExtension(lowerName)) {
                 result.score += 60;
@@ -1023,7 +1028,7 @@ public class AntivirusScanner {
                 result.threat = true;
             }
 
-            if (result.executable) {
+            if (isValidPe) {
                 result.score += scanForScriptPatterns(data);
                 if (result.score >= 20) result.threat = true;
             }
@@ -1386,7 +1391,22 @@ case "2", "dir" -> {
                     var logs = AntivirusLogger.getInstance().getLogs();
                     for (var log : logs) System.out.println(log);
                 }
-                case "5", "watch" -> watchLogs();
+                case "5", "watch" -> {
+                    System.out.print("Pasta para monitorar: ");
+                    String wp = input.nextLine().trim();
+                    if (wp.isEmpty()) wp = System.getenv("HOME");
+                    else if (!wp.startsWith("/")) wp = System.getenv("HOME") + "/" + wp;
+
+                    System.out.print("Auto-quarentena? (S/N): ");
+                    String aq = input.nextLine().trim().toLowerCase();
+                    boolean autoQuar = aq.equals("s");
+
+                    try {
+                        startDaemon(scanner, wp, autoQuar);
+                    } catch (Exception e) {
+                        System.out.println("Erro: " + e.getMessage());
+                    }
+                }
                 case "6", "cache" -> {
                     System.out.print("Limpar cache? (S/n): ");
                     if (input.nextLine().trim().equalsIgnoreCase("s")) {
