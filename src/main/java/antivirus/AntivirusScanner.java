@@ -1302,7 +1302,8 @@ private static void loadBannerFromHome() {
                 [5] watch       -monitorar tempo real
                 [6] cache       - limpar cache
                 [7] varredura  - varrer PC inteiro
-                [8] help       - ajuda
+                [8] health     - verificar integridade do sistema
+                [9] help       - ajuda
                 [0] quit       - sair
                 """);
     }
@@ -1383,7 +1384,8 @@ case "2", "dir" -> {
                     }
                 }
                 case "7", "scan", "fullscan" -> runFullScan(scanner, input);
-                case "8", "help" -> printMenu();
+                case "8", "health" -> runHealthCheck();
+                case "9", "help" -> printMenu();
                 case "0", "quit" -> { return; }
                 default -> {
                     Path p = Path.of(choice);
@@ -1396,6 +1398,128 @@ case "2", "dir" -> {
                 }
             }
         }
+    }
+
+    private static void runHealthCheck() {
+        AntivirusLogger logger = AntivirusLogger.getInstance();
+        logger.info(AntivirusLogger.Category.SYSTEM, "Iniciando health check...");
+
+        int total = 0, passed = 0, failed = 0;
+        StringBuilder report = new StringBuilder();
+
+        System.out.println("\n\033[1m=== HEAPSEC HEALTH CHECK ===\033[0m\n");
+
+        System.out.println("--- Testes do Sistema ---");
+
+        System.out.print("Verificando modulos...");
+        try {
+            antivirus.scanner.SteganographyAnalyzer sa = new antivirus.scanner.SteganographyAnalyzer();
+            System.out.println(" \033[32mOK\033[0m");
+            passed++;
+        } catch (Exception e) {
+            System.out.println(" \033[31mFALHOU\033[0m: " + e.getMessage());
+            failed++;
+        }
+        total++;
+
+        try {
+            antivirus.action.QuarantineManager qm = new antivirus.action.QuarantineManager();
+            System.out.print("QuarantineManager...");
+            System.out.println(" \033[32mOK\033[0m");
+            passed++;
+        } catch (Exception e) {
+            System.out.println(" \033[31mFALHOU\033[0m: " + e.getMessage());
+            failed++;
+        }
+        total++;
+
+        try {
+            antivirus.scanner.EntropyAnalyzer ea = new antivirus.scanner.EntropyAnalyzer();
+            System.out.print("EntropyAnalyzer...");
+            byte[] testData = "test".getBytes();
+            double entropy = ea.calculateEntropy(testData);
+            System.out.println(" \033[32mOK\033[0m (entropia=" + String.format("%.2f", entropy) + ")");
+            passed++;
+        } catch (Exception e) {
+            System.out.println(" \033[31mFALHOU\033[0m: " + e.getMessage());
+            failed++;
+        }
+        total++;
+
+        try {
+            antivirus.scanner.YaraScanner ys = new antivirus.scanner.YaraScanner();
+            System.out.print("YaraScanner...");
+            int rules = ys.getRuleCount();
+            System.out.println(" \033[32mOK\033[0m (" + rules + " regras)");
+            passed++;
+        } catch (Exception e) {
+            System.out.println(" \033[31mFALHOU\033[0m: " + e.getMessage());
+            failed++;
+        }
+        total++;
+
+        try {
+            antivirus.scanner.PEAnalyzer pe = new antivirus.scanner.PEAnalyzer();
+            System.out.print("PEAnalyzer...");
+            byte[] mockPe = new byte[128];
+            mockPe[0] = (byte)0x4D; mockPe[1] = (byte)0x5A;
+            mockPe[0x3C] = 0x40; mockPe[0x3D] = 0x00; mockPe[0x3E] = 0x00; mockPe[0x3F] = 0x00;
+            mockPe[0x40] = 0x50; mockPe[0x41] = 0x45; mockPe[0x42] = 0x00; mockPe[0x43] = 0x00;
+            antivirus.scanner.PEAnalysis result = pe.analyze(mockPe);
+            System.out.println(" \033[32mOK\033[0m (PE valido=" + result.isValidPE() + ")");
+            passed++;
+        } catch (Exception e) {
+            System.out.println(" \033[31mFALHOU\033[0m: " + e.getMessage());
+            failed++;
+        }
+        total++;
+
+        System.out.println("\n--- Cache e Diretórios ---");
+
+        try {
+            Path qDir = Path.of(System.getProperty("user.home"), ".antivirus", "quarantine");
+            System.out.print("Diretorio quarentena...");
+            if (Files.exists(qDir)) {
+                long files = Files.list(qDir).filter(p -> p.toString().endsWith(".log") == false).count();
+                System.out.println(" \033[32mOK\033[0m (" + files + " arquivos)");
+                passed++;
+            } else {
+                System.out.println(" \033[33mNAO EXISTE\033[0m (sera criado)");
+            }
+            total++;
+        } catch (Exception e) {
+            System.out.println(" \033[31mFALHOU\033[0m: " + e.getMessage());
+            failed++;
+        }
+        total++;
+
+        try {
+            Path cacheDir = Path.of(System.getProperty("user.home"), ".antivirus", "cache");
+            System.out.print("Diretorio cache...");
+            if (Files.exists(cacheDir)) {
+                System.out.println(" \033[32mOK\033[0m");
+                passed++;
+            } else {
+                System.out.println(" \033[33mNAO EXISTE\033[0m");
+            }
+            total++;
+        } catch (Exception e) {
+            System.out.println(" \033[31mFALHOU\033[0m: " + e.getMessage());
+            failed++;
+        }
+        total++;
+
+        System.out.println("\n\033[1m=== RESUMO: " + passed + "/" + total + " testes OK ===\033[0m\n");
+
+        if (failed == 0) {
+            System.out.println("\033[32m✓ Sistema saudável\033[0m");
+        } else if (passed > failed) {
+            System.out.println("\033[33m⚠ Funcionando com warnings\033[0m");
+        } else {
+            System.out.println("\033[31m✗ Sistema com problemas\033[0m");
+        }
+
+        logger.info(AntivirusLogger.Category.SYSTEM, "Health check concluído: " + passed + "/" + total + " OK");
     }
 
     private static void runFullScan(AntivirusScanner scanner, Scanner input) {
