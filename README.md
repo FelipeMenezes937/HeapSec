@@ -201,6 +201,12 @@ Testado em AMD Ryzen 5 5600X, SSD NVMe:
    - Detecção de extensões duplas: `fatura.pdf.exe`, `comprovante.docx.scr`
    - MIME type mismatch (executável com magic bytes de PDF/JPG)
 
+5. **Análise de Esteganografia**
+   - **EOF Anomaly Detection**: Detecta dados inseridos após markers de fim de arquivo (IEND em PNG, EOF em JPEG/PDF)
+   - **LSB Analysis**: Análise estatística dos bits menos significativos para detectar padrões não-aleatórios (indicativo de LSB steganography)
+   - **DCT Analysis**: Análise de coeficientes DCT em imagens JPEG para detectar anomalias em frequência
+   - **Magic Byte Consistency**: Verifica inconsistências entre extensão do arquivo e magic bytes
+
 ---
 
 ## Segurança & Hardening
