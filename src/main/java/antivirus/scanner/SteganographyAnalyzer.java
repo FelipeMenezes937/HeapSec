@@ -72,43 +72,39 @@ public class SteganographyAnalyzer {
 
     private boolean isJPEG(byte[] data) {
         if (data.length < 3) return false;
-        return data[0] == JPEG_MAGIC[0] && data[1] == JPEG_MAGIC[1] && data[2] == JPEG_MAGIC[2];
+        return (data[0] & 0xFF) == 0xFF && (data[1] & 0xFF) == 0xD8 && (data[2] & 0xFF) == 0xFF;
     }
 
     private boolean isPNG(byte[] data) {
         if (data.length < 8) return false;
-        for (int i = 0; i < 8; i++) {
-            if (data[i] != PNG_MAGIC[i]) return false;
-        }
-        return true;
+        return (data[0] & 0xFF) == 0x89 && (data[1] & 0xFF) == 0x50 && (data[2] & 0xFF) == 0x4E && (data[3] & 0xFF) == 0x47 &&
+               (data[4] & 0xFF) == 0x0D && (data[5] & 0xFF) == 0x0A && (data[6] & 0xFF) == 0x1A && (data[7] & 0xFF) == 0x0A;
     }
 
     private boolean isGIF(byte[] data) {
         if (data.length < 3) return false;
-        return data[0] == GIF_MAGIC[0] && data[1] == GIF_MAGIC[1] && data[2] == GIF_MAGIC[2];
+        return (data[0] & 0xFF) == 0x47 && (data[1] & 0xFF) == 0x49 && (data[2] & 0xFF) == 0x46;
     }
 
     private boolean isBMP(byte[] data) {
         if (data.length < 2) return false;
-        return data[0] == BMP_MAGIC[0] && data[1] == BMP_MAGIC[1];
+        return (data[0] & 0xFF) == 0x42 && (data[1] & 0xFF) == 0x4D;
     }
 
     private boolean isTIFF(byte[] data) {
         if (data.length < 4) return false;
-        for (int i = 0; i < 4; i++) {
-            if (data[i] != TIFF_LE_MAGIC[i] && data[i] != TIFF_BE_MAGIC[i]) return false;
-        }
-        return true;
+        return ((data[0] & 0xFF) == 0x49 && (data[1] & 0xFF) == 0x49 && (data[2] & 0xFF) == 0x2A && (data[3] & 0xFF) == 0x00) ||
+               ((data[0] & 0xFF) == 0x4D && (data[1] & 0xFF) == 0x4D && (data[2] & 0xFF) == 0x00 && (data[3] & 0xFF) == 0x2A);
     }
 
     private boolean isPDF(byte[] data) {
         if (data.length < 4) return false;
-        return data[0] == PDF_MAGIC[0] && data[1] == PDF_MAGIC[1] && data[2] == PDF_MAGIC[2] && data[3] == PDF_MAGIC[3];
+        return (data[0] & 0xFF) == 0x25 && (data[1] & 0xFF) == 0x50 && (data[2] & 0xFF) == 0x44 && (data[3] & 0xFF) == 0x46;
     }
 
     private boolean isWAV(byte[] data) {
         if (data.length < 4) return false;
-        return data[0] == WAV_MAGIC[0] && data[1] == WAV_MAGIC[1] && data[2] == WAV_MAGIC[2] && data[3] == WAV_MAGIC[3];
+        return (data[0] & 0xFF) == 0x52 && (data[1] & 0xFF) == 0x49 && (data[2] & 0xFF) == 0x46 && (data[3] & 0xFF) == 0x46;
     }
 
     private int checkEOFAnomaly(byte[] data, String fileName) {
@@ -149,9 +145,7 @@ public class SteganographyAnalyzer {
             }
         } else if (isPDF(data)) {
             for (int i = data.length - 9; i >= 0; i--) {
-                if (data[i] == 0x25 && i + 8 < data.length &&
-                    data[i] == 0x25 && data[i+1] == 0x45 && data[i+2] == 0x4F &&
-                    data[i+3] == 0x46) {
+                if (data[i] == 0x25 && data[i+1] == 0x45 && data[i+2] == 0x4F && data[i+3] == 0x46) {
                     if (i + 9 < data.length) {
                         for (int j = i + 9; j < data.length; j++) {
                             if (data[j] != 0x0A && data[j] != 0x0D && data[j] != 0x20) {

@@ -8,6 +8,10 @@ import java.util.List;
 public class ProcessKiller {
 
     public boolean killByPath(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            return false;
+        }
+        
         String home = System.getProperty("user.home");
         String os = System.getProperty("os.name").toLowerCase();
         boolean isWindows = os.contains("windows");
