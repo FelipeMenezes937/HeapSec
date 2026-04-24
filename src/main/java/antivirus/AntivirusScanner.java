@@ -855,9 +855,39 @@ public class AntivirusScanner {
         }
     }
 
+    private static final String[] DAEMON_WATCH_EXTENSIONS = {
+        ".exe", ".msi", ".scr", ".bat", ".cmd", ".ps1", ".vbs", ".vbe", ".js", ".jse",
+        ".wsf", ".jar", ".sh", ".bash", ".zsh", ".py", ".rb", ".pl", ".php",
+        ".vba", ".xlsm", ".docm", ".pptm", ".apk", ".dmg", ".pkg", ".deb", ".rpm",
+        ".msix", ".appx", ".appimage", ".ELF", ".so", ".dll", ".sys"
+    };
+
+    private static final String[] INSTALLER_KEYWORDS = {
+        "install", "setup", "update", "patch", "crack", "keygen", "activator",
+        "free", "gift", "generator", "license", "cracked", "patched", "full"
+    };
+
+    private static final String[] SCRIPT_SIGNAURES = {
+        "cmd.exe /c", "powershell -nop", "wscript ", "cscript ", "certutil -decode",
+        "bitsadmin /transfer", "whoami /all", "reg add HKLM", "vssadmin delete",
+        "mimikatz", "encodedcommand", "downloadstring", "invoke-webrequest",
+        "iex ", "invoke-expression", "eval(", "exec(", "system(", "passthru",
+        "CreateObject", "WScript.Shell", "ShellExecute", "/dev/tcp/", "nc -e",
+        "bash -i", "rm -rf", ":(){:|:&};:", "curl ", "wget ", "base64 -d"
+    };
+
     private static void startDaemon(AntivirusScanner scanner, String watchPath, boolean autoQuarantine) {
         AntivirusLogger logger = AntivirusLogger.getInstance();
         logger.info(AntivirusLogger.Category.SYSTEM, "Daemon iniciado em: " + watchPath);
+
+        System.out.println("=".repeat(60));
+        System.out.println("  HEAPSEC WATCH MODE - Modo vigilante ativo");
+        System.out.println("=".repeat(60));
+        System.out.println("  Pasta: " + watchPath);
+        System.out.println("  Auto-acao: " + (autoQuarantine ? "ATIVADO" : "DESATIVADO"));
+        System.out.println("  Extensoes monitoradas: " + DAEMON_WATCH_EXTENSIONS.length);
+        System.out.println("=".repeat(60));
+        System.out.println();
 
         try (java.nio.file.WatchService watchService = java.nio.file.FileSystems.getDefault().newWatchService()) {
             Path path = Path.of(watchPath);
@@ -865,7 +895,7 @@ public class AntivirusScanner {
                 java.nio.file.StandardWatchEventKinds.ENTRY_CREATE,
                 java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY);
 
-            System.out.println("Daemon ativo! Monitorando alteracoes...");
+            System.out.println("[WATCH] Aguardando alteracoes...\n");
 
             while (true) {
                 WatchKey key = watchService.take();
@@ -874,22 +904,45 @@ public class AntivirusScanner {
                     Path filename = ev.context();
                     Path fullPath = path.resolve(filename);
 
-                    if (Files.isRegularFile(fullPath)) {
-                        String ext = filename.toString().toLowerCase();
-                        if (ext.endsWith(".exe") || ext.endsWith(".sh") || ext.endsWith(".bat") ||
-                            ext.endsWith(".ps1") || ext.endsWith(".vbs") || ext.endsWith(".js")) {
+                    if (!Files.isRegularFile(fullPath)) continue;
 
-                            System.out.println("[DAEMON] Novo arquivo detectado: " + filename);
-                            try {
-                                ScanResult result = scanner.scanFile(fullPath.toString(), autoQuarantine, false);
-                                if (!result.getScore().equals("SEGURO")) {
-                                    System.out.println("[ALERTA] " + result.getFileName() + " -> " + result.getScore());
-                                }
-                            } catch (Exception e) {
-                                System.err.println("Erro ao escanear: " + e.getMessage());
-                            }
-                        }
+                    String ext = getFileExtension(filename.toString()).toLowerCase();
+                    String lowerName = filename.toString().toLowerCase();
+
+                    if (!isWatchedExtension(ext, lowerName)) continue;
+
+                    System.out.println("[WATCH] Novo arquivo detectado: " + filename);
+                    System.out.println("[WATCH] Aguardando arquivo estar pronto...");
+
+                    if (!waitForFileReady(fullPath, 10)) {
+                        System.out.println("[WATCH] Arquivo ainda sendo baixado, ignorando...");
+                        continue;
                     }
+
+                    try {
+                        DaemonScanResult result = analyzeFileDaemon(fullPath, filename.toString());
+
+                        if (result.threat) {
+                            System.out.println();
+                            System.out.println("\u001b[31m" + "=".repeat(60));
+                            System.out.println("  [!] AMEACA DETECTADA - INSTALACAO BLOQUEADA [!]");
+                            System.out.println("=".repeat(60) + "\u001b[0m");
+                            System.out.println("  Arquivo: " + filename);
+                            System.out.println("  Classificacao: " + result.level);
+                            System.out.println("  Score: " + result.score);
+                            System.out.println("  Motivos: " + String.join(", ", result.reasons));
+                            System.out.println();
+
+                            if (autoQuarantine) {
+                                handleThreat(scanner, fullPath.toString(), result, logger);
+                            }
+                        } else {
+                            System.out.println("[WATCH] \u001b[32mArquivo seguro: " + filename + "\u001b[0m");
+                        }
+                    } catch (Exception e) {
+                        System.err.println("[WATCH] Erro ao analisar: " + e.getMessage());
+                    }
+                    System.out.println();
                 }
                 key.reset();
             }
@@ -897,6 +950,304 @@ public class AntivirusScanner {
             if (!e.getMessage().equals("Interrupted")) {
                 System.err.println("Daemon parado: " + e.getMessage());
             }
+        }
+    }
+
+    private static boolean isWatchedExtension(String ext, String lowerName) {
+        for (String watched : DAEMON_WATCH_EXTENSIONS) {
+            if (lowerName.endsWith(watched)) return true;
+        }
+        if (ext.equals(".exe")) return true;
+        if (lowerName.contains(".exe.") || (lowerName.contains(".exe") && !lowerName.endsWith(".exe"))) return true;
+        return false;
+    }
+
+    private static String getFileExtension(String filename) {
+        int lastDot = filename.lastIndexOf('.');
+        return lastDot > 0 ? filename.substring(lastDot) : "";
+    }
+
+    private static boolean waitForFileReady(Path path, int maxSeconds) {
+        for (int i = 0; i < maxSeconds * 10; i++) {
+            try {
+                if (Files.size(path) > 0) {
+                    try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(path.toFile(), "rw")) {
+                        return true;
+                    }
+                }
+            } catch (java.io.IOException e) {
+                try { Thread.sleep(100); } catch (InterruptedException ie) { return false; }
+            }
+        }
+        return false;
+    }
+
+    private static class DaemonScanResult {
+        boolean threat;
+        String level;
+        int score;
+        List<String> reasons;
+        String category;
+        boolean executable;
+
+        DaemonScanResult() {
+            this.threat = false;
+            this.level = "SEGURO";
+            this.score = 0;
+            this.reasons = new ArrayList<>();
+            this.category = "UNKNOWN";
+            this.executable = false;
+        }
+    }
+
+    private static EntropyAnalyzer daemonEntropy = new EntropyAnalyzer();
+
+    private static DaemonScanResult analyzeFileDaemon(Path path, String fileName) {
+        DaemonScanResult result = new DaemonScanResult();
+        String lowerName = fileName.toLowerCase();
+
+        try {
+            byte[] data = Files.readAllBytes(path);
+            result.executable = isExecutable(data, lowerName);
+
+            if (isDoubleExtension(lowerName)) {
+                result.score += 60;
+                result.reasons.add("Extensao dupla suspeita");
+                result.threat = true;
+            }
+
+            if (isFakeInstaller(lowerName)) {
+                result.score += 70;
+                result.reasons.add("Nome de instalador falso detectado");
+                result.threat = true;
+            }
+
+            if (result.executable) {
+                result.score += scanForScriptPatterns(data);
+                if (result.score >= 20) result.threat = true;
+            }
+
+            double entropy = daemonEntropy.calculateEntropy(data);
+            if (entropy > 8.0) {
+                result.score += 30;
+                result.reasons.add(String.format("Alta entropia (%.2f) - possivel packer/criptografia", entropy));
+                result.threat = true;
+            }
+
+            for (String sig : SCRIPT_SIGNAURES) {
+                if (containsIgnoreCase(data, sig)) {
+                    result.score += 15;
+                    result.reasons.add("Script malicioso: " + sig);
+                    result.threat = true;
+                }
+            }
+
+            if (lowerName.endsWith(".ps1")) {
+                result.category = "POWERSHELL";
+                if (containsIgnoreCase(data, "downloadstring") || containsIgnoreCase(data, "invoke-webrequest") ||
+                    containsIgnoreCase(data, "iex ") || containsIgnoreCase(data, "encodedcommand") ||
+                    containsIgnoreCase(data, "-nop -w hidden") || containsIgnoreCase(data, "bypass -executionpolicy") ||
+                    containsIgnoreCase(data, "downloadfile") || containsIgnoreCase(data, "webclient") ||
+                    containsIgnoreCase(data, "start-process") || containsIgnoreCase(data, "new-object system.net.webclient") ||
+                    containsIgnoreCase(data, "[system.io.file]::writeallbytes") || containsIgnoreCase(data, "invoke-expression") ||
+                    containsIgnoreCase(data, "set-itemproperty") || containsIgnoreCase(data, "new-service") ||
+                    containsIgnoreCase(data, "schtasks") || containsIgnoreCase(data, "register-wmi") ||
+                    containsIgnoreCase(data, "amsiinitfailed") || containsIgnoreCase(data, "am秀") ||
+                    containsIgnoreCase(data, "set-mppreference") || containsIgnoreCase(data, "exclusion_path") ||
+                    containsIgnoreCase(data, "mimikatz") || containsIgnoreCase(data, "invoke-mimikatz") ||
+                    containsIgnoreCase(data, "get-keystrokes") || containsIgnoreCase(data, "keylog") ||
+                    containsIgnoreCase(data, "get-gpppassword") || containsIgnoreCase(data, "gpp") ||
+                    containsIgnoreCase(data, "ntds.dit") || containsIgnoreCase(data, "sam hive")) {
+                    result.score += 40;
+                    result.reasons.add("PowerShell malicioso detectado (downloader/executor/AV bypass)");
+                    result.threat = true;
+                }
+            }
+
+            if (lowerName.endsWith(".js") || lowerName.endsWith(".jse")) {
+                result.category = "JAVASCRIPT";
+                if (containsIgnoreCase(data, "wscript") || containsIgnoreCase(data, "activexobject") ||
+                    containsIgnoreCase(data, "adodb.stream")) {
+                    result.score += 35;
+                    result.reasons.add("JavaScript malicioso (WSH) detectado");
+                    result.threat = true;
+                }
+            }
+
+            if (lowerName.endsWith(".vbs") || lowerName.endsWith(".vbe")) {
+                result.category = "VBSCRIPT";
+                if (containsIgnoreCase(data, "createobject") || containsIgnoreCase(data, "shell.application") ||
+                    containsIgnoreCase(data, "wscript.shell")) {
+                    result.score += 35;
+                    result.reasons.add("VBScript malicioso detectado");
+                    result.threat = true;
+                }
+            }
+
+            if (lowerName.endsWith(".bat") || lowerName.endsWith(".cmd")) {
+                result.category = "BATCH";
+                if (containsIgnoreCase(data, "del /s /q") || containsIgnoreCase(data, "rmdir /s /q") ||
+                    containsIgnoreCase(data, ":(){:|:&};:") || containsIgnoreCase(data, "certutil -decode") ||
+                    containsIgnoreCase(data, "vssadmin delete shadows") || containsIgnoreCase(data, "bcdedit") ||
+                    containsIgnoreCase(data, "icacls") || containsIgnoreCase(data, "takeown") ||
+                    containsIgnoreCase(data, "net user") || containsIgnoreCase(data, "net localgroup") ||
+                    containsIgnoreCase(data, "powershell -enc") || containsIgnoreCase(data, "invoke-mimikatz") ||
+                    containsIgnoreCase(data, "reg save") || containsIgnoreCase(data, "reg export")) {
+                    result.score += 40;
+                    result.reasons.add("Batch script destrutivo/privilege escalation detectado");
+                    result.threat = true;
+                }
+            }
+
+            if (lowerName.endsWith(".jar")) {
+                result.category = "JAR";
+                if (containsIgnoreCase(data, "mimikatz") || containsIgnoreCase(data, "jdbc:mysql")) {
+                    result.score += 30;
+                    result.reasons.add("JAR suspeito detectado");
+                    result.threat = true;
+                }
+            }
+
+            if (lowerName.matches(".*\\.docm$|.*\\.xlsm$|.*\\.pptm$")) {
+                result.category = "OFFICE_MACRO";
+                if (containsIgnoreCase(data, "sub auto_open") || containsIgnoreCase(data, "document_open") ||
+                    containsIgnoreCase(data, "shell(") || containsIgnoreCase(data, "createobject")) {
+                    result.score += 50;
+                    result.reasons.add("Macro Office maliciosa detectado");
+                    result.threat = true;
+                }
+            }
+
+            if (result.score >= 120) result.level = "CRITICO";
+            else if (result.score >= 85) result.level = "ALTO";
+            else if (result.score >= 55) result.level = "MEDIO";
+            else if (result.score >= 20) result.level = "BAIXO";
+            else result.level = "SEGURO";
+
+        } catch (Exception e) {
+            System.err.println("[WATCH] Erro ao ler arquivo: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    private static boolean isDoubleExtension(String lowerName) {
+        String[] dangerous = {".exe", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".jar", ".scr", ".pif", ".msi"};
+        for (String ext : dangerous) {
+            if (lowerName.contains(ext) && !lowerName.endsWith(ext)) {
+                int pos = lowerName.indexOf(ext);
+                if (pos > 0 && lowerName.charAt(pos - 1) != '.') continue;
+                String before = lowerName.substring(0, pos);
+                if (before.contains(".")) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isFakeInstaller(String lowerName) {
+        for (String keyword : INSTALLER_KEYWORDS) {
+            if (lowerName.contains(keyword)) {
+                if (lowerName.matches(".*" + keyword + ".*\\.(exe|msi|bat|cmd|ps1|vbs|js|jar|scr)$")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isExecutable(byte[] data, String lowerName) {
+        if (lowerName.endsWith(".exe") || lowerName.endsWith(".msi") || lowerName.endsWith(".dll") ||
+            lowerName.endsWith(".sys") || lowerName.endsWith(".scr") || lowerName.endsWith(".ELF")) {
+            return data.length > 2 && ((data[0] == 0x4D && data[1] == 0x5A) || (data[0] == 0x7F && data[1] == 0x45 && data[2] == 0x4C));
+        }
+        return false;
+    }
+
+    private static int scanForScriptPatterns(byte[] data) {
+        int score = 0;
+        String[] dangerous = {
+            "mimikatz", "pwdump", "lazagne", "netcat", "nc -e", "/dev/tcp",
+            "bash -i", "rm -rf", ":(){:|:&};:", "mkfifo", "/dev/shm",
+            "curl ", "wget ", "lynx ", "fetch ", "base64 -d",
+            "from base64", "import base64", "zlib.decompress",
+            "socket", "subprocess", "os.system", "ctypes",
+            "virtualalloc", "writeprocessmemory", "createremotethread",
+            "winexec", "shell32", "advapi32", "ntdll"
+        };
+
+        for (String pattern : dangerous) {
+            if (containsIgnoreCase(data, pattern)) {
+                score += 10;
+            }
+        }
+
+        return score;
+    }
+
+    private static boolean containsIgnoreCase(byte[] data, String str) {
+        String content = new String(data, java.nio.charset.StandardCharsets.UTF_8).toLowerCase();
+        return content.contains(str.toLowerCase());
+    }
+
+    private static void handleThreat(AntivirusScanner scanner, String filePath, DaemonScanResult result, AntivirusLogger logger) {
+        try {
+            if (result.score >= 80) {
+                System.out.println("[WATCH] Deletando arquivo...");
+                boolean deleted = new java.io.File(filePath).delete();
+                if (deleted) {
+                    System.out.println("[WATCH] \u001b[32mArquivo deletado com sucesso\u001b[0m");
+                    logger.logQuarantine(filePath, "WATCHDOG - Score: " + result.score + " - " + String.join(", ", result.reasons));
+                }
+            } else {
+                System.out.println("[WATCH] Movendo para quarenta...");
+                boolean quarantined = scanner.getQuarantineManager().quarantine(filePath);
+                if (quarantined) {
+                    System.out.println("[WATCH] \u001b[33mArquivo movido para quarenta\u001b[0m");
+                    logger.logQuarantine(filePath, "WATCHDOG - Score: " + result.score);
+                }
+            }
+
+            if (result.executable && result.score >= 55) {
+                System.out.println("[WATCH] Verificando se processo esta em execucao...");
+                ProcessKiller pk = new ProcessKiller();
+                if (pk.killByPath(filePath)) {
+                    System.out.println("[WATCH] \u001b[31mProcesso relacionado encerrado\u001b[0m");
+                }
+            }
+
+            System.out.println("[WATCH] Notificando usuario...");
+            notifyUser(result, filePath);
+
+        } catch (Exception e) {
+            System.err.println("[WATCH] Erro ao进行处理: " + e.getMessage());
+        }
+    }
+
+    private static void notifyUser(DaemonScanResult result, String filePath) {
+        try {
+            String title = "ALERTA HEAPSEC - Ameaca Bloqueada";
+            String message = "Arquivo: " + new java.io.File(filePath).getName() + "\n" +
+                           "Nivel: " + result.level + "\n" +
+                           "Score: " + result.score + "\n" +
+                           "Motivos: " + String.join(", ", result.reasons);
+
+            String os = System.getProperty("os.name").toLowerCase();
+            if (os.contains("linux")) {
+                if (new java.io.File("/usr/bin/notify-send").exists()) {
+                    new ProcessBuilder("notify-send", "-u", "critical", "-t", "10000", title, message).start();
+                } else if (new java.io.File("/usr/bin/zenity").exists()) {
+                    new ProcessBuilder("zenity", "--warning", "--text=" + message, "--title=" + title).start();
+                }
+            } else if (os.contains("windows")) {
+                // Windows notification via PowerShell
+                String escapedMessage = message.replace("'", "''").replace("\"", "\\\"");
+                String escapedTitle = title.replace("'", "''").replace("\"", "\\\"");
+                String psCommand = "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); " +
+                                 "[System.Windows.Forms.MessageBox]::Show('" + escapedMessage + "', '" + escapedTitle + "', 'OK', 'Warning')";
+                new ProcessBuilder("powershell", "-Command", psCommand).start();
+            }
+        } catch (Exception e) {
+            System.out.println("[WATCH] Aviso visual nao disponivel: " + e.getMessage());
         }
     }
 
