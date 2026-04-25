@@ -9,7 +9,10 @@ import antivirus.security.PathValidator;
 
 public class DirectoryCache {
     
-    private static final String CACHE_DIR = System.getProperty("user.home") + "/.antivirus";
+    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("windows");
+    private static final String CACHE_DIR = IS_WINDOWS 
+        ? System.getProperty("user.home") + "\\.antivirus" 
+        : System.getProperty("user.home") + "/.antivirus";
     private static final Path CACHE_FILE = Path.of(CACHE_DIR, "dir_cache.txt");
     
     private static final Map<String, DirInfo> cache = new HashMap<>();

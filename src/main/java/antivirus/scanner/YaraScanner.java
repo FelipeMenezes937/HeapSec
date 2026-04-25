@@ -246,8 +246,11 @@ public class YaraScanner {
 
     private void loadUserRules() {
         try {
-            String RULES_DIR = System.getProperty("user.home") + "/.antivirus/rules";
-            Path dir = Paths.get(RULES_DIR);
+            boolean isWindows = System.getProperty("os.name").toLowerCase().contains("windows");
+            String rulesDir = isWindows 
+                ? System.getProperty("user.home") + "\\.antivirus\\rules" 
+                : System.getProperty("user.home") + "/.antivirus/rules";
+            Path dir = Paths.get(rulesDir);
             if (!Files.exists(dir)) {
                 Files.createDirectories(dir);
                 return;

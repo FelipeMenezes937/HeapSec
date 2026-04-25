@@ -9,7 +9,10 @@ import antivirus.security.PathValidator;
 
 public class HashCache {
 
-    private static final String CACHE_FILE = System.getProperty("user.home") + "/.antivirus/cache.db";
+    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("windows");
+    private static final String CACHE_FILE = IS_WINDOWS 
+        ? System.getProperty("user.home") + "\\.antivirus\\cache.db" 
+        : System.getProperty("user.home") + "/.antivirus/cache.db";
     private static final ConcurrentHashMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
     public static class CacheEntry {

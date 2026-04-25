@@ -12,7 +12,10 @@ import java.util.List;
 
 public class AntivirusLogger {
 
-    private static final String LOG_DIR = System.getProperty("user.home") + "/.antivirus/logs";
+    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("windows");
+    private static final String LOG_DIR = IS_WINDOWS 
+        ? System.getProperty("user.home") + "\\.antivirus\\logs" 
+        : System.getProperty("user.home") + "/.antivirus/logs";
     private static final String MAIN_LOG = "antivirus.log";
     private static AntivirusLogger instance;
 

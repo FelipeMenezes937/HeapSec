@@ -57,14 +57,22 @@ public class AntivirusScanner {
         if (path == null) return false;
         if (PROTECTED_PREFIXES == null) {
             String home = System.getProperty("user.home");
-            PROTECTED_PREFIXES = new String[]{
-                home + "/antivirus",
-                home + "/.antivirus"
-            };
+            boolean isWindows = System.getProperty("os.name").toLowerCase().contains("windows");
+            if (isWindows) {
+                PROTECTED_PREFIXES = new String[]{
+                    home + "\\antivirus",
+                    home + "\\.antivirus"
+                };
+            } else {
+                PROTECTED_PREFIXES = new String[]{
+                    home + "/antivirus",
+                    home + "/.antivirus"
+                };
+            }
         }
-        path = path.replace("\\", "/");
+        String normalized = path.replace("\\", "/");
         for (String prefix : PROTECTED_PREFIXES) {
-            if (path.startsWith(prefix.replace("\\", "/"))) return true;
+            if (normalized.startsWith(prefix.replace("\\", "/"))) return true;
         }
         return false;
     }
@@ -558,9 +566,15 @@ public class AntivirusScanner {
         return scanDirectory(dirPath, autoAction, false, true);
     }
 
-    private static final String[] SKIP_DIRS = {"/proc", "/sys", "/dev", "/run", "/tmp", "/usr/lib", "/usr/share", "/lib", "/share", "/snap", "/var/cache"};
+    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("windows");
+
+    private static final String[] SKIP_DIRS_LINUX = {"/proc", "/sys", "/dev", "/run", "/tmp", "/usr/lib", "/usr/share", "/lib", "/share", "/snap", "/var/cache"};
+    private static final String[] SKIP_DIRS_WINDOWS = {"C:\\Windows", "C:\\Windows\\System32", "C:\\Windows\\SysWOW64", "C:\\Program Files", "C:\\Program Files (x86)", "$Recycle.Bin", "System Volume Information"};
+    private static final String[] SKIP_DIRS = IS_WINDOWS ? SKIP_DIRS_WINDOWS : SKIP_DIRS_LINUX;
     private static final String[] SKIP_EXT = {".pak", ".map", ".bin", ".elf", ".so", ".a", ".o", ".dll", ".sys", ".dylib", ".deb", ".rpm", ".appimage"};
-    private static final String[] KNOWN_SAFE_NAMES = {"libc", "kernel", "system", "boot", "init", "udev", "dbus", "glibc", "gcc", "clang", "llvm", "arduino", "esp-idf", "platformio"};
+    private static final String[] KNOWN_SAFE_NAMES = IS_WINDOWS 
+        ? new String[]{"kernel", "system", "boot", "ntoskrnl", "ntkrnlmp", "hal", "wininit", "csrss", "smss", "winlogon", "services", "lsass", "svchost"}
+        : new String[]{"libc", "kernel", "system", "boot", "init", "udev", "dbus", "glibc", "gcc", "clang", "llvm", "arduino", "esp-idf", "platformio"};
     private static final String[] SKIP_PATH_CONTAINS = {".gradle", "node_modules", "vendor/bundle", "target/debug", "target/release", ".cargo/registry", ".rustup"};
 
     private static final int BATCH_SIZE = 100;

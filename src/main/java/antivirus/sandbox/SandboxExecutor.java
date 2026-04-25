@@ -13,7 +13,13 @@ import java.util.concurrent.TimeUnit;
 
 public class SandboxExecutor {
 
-    private static final String LOG_DIR = System.getProperty("user.home") + "/.antivirus/logs";
+    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("windows");
+    private static final String LOG_DIR = IS_WINDOWS 
+        ? System.getProperty("user.home") + "\\.antivirus\\logs" 
+        : System.getProperty("user.home") + "/.antivirus/logs";
+    private static final String TEMP_DIR = IS_WINDOWS 
+        ? System.getProperty("java.io.tmpdir").replace("/", "\\") 
+        : "/tmp";
     private SandboxType sandboxType;
     private String sessionId;
     private Path sandboxTmpDir;
@@ -33,7 +39,7 @@ public class SandboxExecutor {
         try {
             Files.createDirectories(Path.of(LOG_DIR));
             if (useTmpfs) {
-                this.sandboxTmpDir = Files.createTempDirectory(Path.of("/tmp"), "antivirus_sandbox_");
+                this.sandboxTmpDir = Files.createTempDirectory(Path.of(TEMP_DIR), "antivirus_sandbox_");
             }
         } catch (IOException e) {
             System.err.println("Erro ao criar diretorio de logs: " + e.getMessage());
@@ -48,7 +54,7 @@ public class SandboxExecutor {
         try {
             Files.createDirectories(Path.of(LOG_DIR));
             if (useTmpfs) {
-                this.sandboxTmpDir = Files.createTempDirectory(Path.of("/tmp"), "antivirus_sandbox_");
+                this.sandboxTmpDir = Files.createTempDirectory(Path.of(TEMP_DIR), "antivirus_sandbox_");
             }
         } catch (IOException e) {
             System.err.println("Erro ao criar diretorio de logs: " + e.getMessage());
