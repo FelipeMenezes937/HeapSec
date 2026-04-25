@@ -51,8 +51,11 @@ if %errorlevel% neq 0 (
 
 echo Using Java: !JAVA_VERSION_LINE!
 
-echo Compiling HeapSec...
+echo Cleaning old classes...
+if exist "%CLASSES_DIR%" rmdir /s /q "%CLASSES_DIR%"
 if not exist "%CLASSES_DIR%" mkdir "%CLASSES_DIR%"
+
+echo Compiling HeapSec...
 
 "%JAVAC_PATH%\javac.exe" -d "%CLASSES_DIR%" -sourcepath src\main\java src\main\java\antivirus\*.java src\main\java\antivirus\*\*.java 2>NUL
 if %errorlevel% neq 0 (

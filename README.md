@@ -5,13 +5,13 @@
 #  HeapSec Antivirus
 
 **Scanner antivírus local por análise estática**  
-*Java 11+ • Scripts Shell • Zero dependências*
+*Java 21+ • Linux/Windows • Zero dependências*
 
-[![Java](https://img.shields.io/badge/Java-11+-ED8B00?logo=java)](https://openjdk.org/)
+[![Java](https://img.shields.io/badge/Java-21+-ED8B00?logo=java)](https://openjdk.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Performance](https://img.shields.io/badge/Velocidade-1.8k%20arquivos%2Fs-blue)]()
 
-[ Instalação](#instalação) • [🚀 Uso](#uso) • [ Arquitetura](#arquitetura) • [ Performance](#performance) • [ Disclaimer](#%EF%B8%8F-aviso-legal)
+[ Instalação](#instalação) • [ Uso](#uso) • [ Arquitetura](#arquitetura) • [ Performance](#performance) • [ Disclaimer](#%EF%B8%8F-aviso-legal)
 
 </div>
 
@@ -38,20 +38,28 @@ implementa técnicas avançadas de detecção heurística sem dependência de cl
 graph LR
     A[Input] --> B[Path Validator]
     B --> C[Hash Cache]
-    C --> D[Parallel Scanner]
-    D --> E[Entropy Analysis]
-    D --> F[YARA Engine]
-    D --> G[PE Analyzer]
-    E --> H[Scoring Engine]
-    F --> H
-    G --> H
-    H --> I[Quarantine/Report]
+    B --> D[Directory Cache]
+    C --> E[Parallel Scanner]
+    D --> E
+    E --> F[Entropy Analyzer]
+    E --> G[YARA Engine]
+    E --> H[PE Analyzer]
+    E --> I[Steganography Analyzer]
+    E --> J[Extension Checker]
+    E --> K[String Detector]
+    F --> L[Scoring Engine]
+    G --> L
+    H --> L
+    I --> L
+    J --> L
+    K --> L
+    L --> M[Quarantine/Report]
 ```
 
 **Por que Java sem dependências?**
-- **Zero setup**: Apenas Java 11+ (qualquer JVM serve)
-- **Portável**: Funciona em qualquer Linux com Java
-- **Simples**: Scripts shell para compilar e rodar
+- **Zero setup**: Apenas Java 21+ (qualquer JVM serve)
+- **Portável**: Funciona em Linux e Windows
+- **Simples**: Scripts shell/batch para compilar e rodar
 - **Offline**: Não requer internet nem cloud
 
 ### Componentes Core
@@ -62,22 +70,32 @@ graph LR
 | `YaraScanner` | Aho-Corasick O(n) | Matching de 60+ padrões comportamentais |
 | `PEAnalyzer` | Custom PE Parser | Análise de seções suspeitas (Write+Execute, nomes anômalos) |
 | `HashCache` | ConcurrentHashMap | Cache thread-safe com TTL e validação de integridade |
+| `DirectoryCache` | HashMap | Cache de diretórios escaneados |
 | `PathValidator` | Canonical Path + Symlink check | Proteção contra path traversal e symlink attacks |
+| `SteganographyAnalyzer` | EOF/LSB/DCT Analysis | Detecção de esteganografia em imagens |
+| `ExtensionChecker` | MIME + Magic Bytes | Detecção de extensão dupla e MIME mismatch |
+| `StringDetector` | Boyer-Moore | Detecção de strings suspeitas (password stealers, RATs) |
 
 ---
 
 ## Instalação em 5 segundos
 
 ### Pré-requisitos
-- Java 11+ (OpenJDK, Azul Zulu, etc)
-- Linux ou Windows (com Git Bash, WSL ou CMD/PowerShell)
+- Java 21+ (OpenJDK, Azul Zulu, etc)
+- Linux ou Windows
 
 ### Modo rápido (sem instalar)
 
 ```bash
+# Linux
 git clone https://github.com/FelipeMenezes937/heapsec.git
 cd heapsec
 ./heapsec.sh
+
+# Windows (CMD ou PowerShell)
+git clone https://github.com/FelipeMenezes937/heapsec.git
+cd heapsec
+.\heapsec.bat
 ```
 
 ### Instalação permanente
@@ -97,7 +115,7 @@ heapsec  # Menu interativo!
 
 ---
 
-## 🚀 Uso
+## Uso
 
 ### CLI - Modos de Operação
 
@@ -124,23 +142,29 @@ O menu interativo oferece controle granular sobre ações:
 
 ```text
 ╔════════════════════════════════════════╗
-║         HeapSec v1.1.0                 ║
+║         HeapSec v1.2.0                 ║
 ╠════════════════════════════════════════╣
-║  [1] Escanear diretório                ║
-║  [2] Escanear arquivo específico       ║
-║  [3] Gerenciar quarentena              ║
-║  [4] Ver logs detalhados               ║
-║  [5] Atualizar definições (local)      ║
+║  [1] arquivo     - escanear arquivo    ║
+║  [2] diretorio   - escanear diretorio  ║
+║  [3] quarantine  - listar quarentena   ║
+║  [4] logs        - ver logs            ║
+║  [5] watch       - monitorar tempo real║
+║  [6] cache       - limpar cache        ║
+║  [7] varredura   - varrer PC inteiro   ║
+║  [8] health      - integridade sistema ║
+║  [9] help        - ajuda               ║
+║  [0] quit        - sair                ║
 ╚════════════════════════════════════════╝
 
-> 1
-Diretório para escanear: /home/user/Downloads
-Ação em ameaças detectadas:
-[D]eletar / [Q]uarentena / [A]nalisar apenas / [C]ancelar: q
-
-[PROGRESSO] Batch 1/5 | Arquivos: 1000 | Velocidade: 1850 arq/s
-[PROGRESSO] Batch 2/5 | Arquivos: 2000 | Ameaças suspeitas: 3
-...
+> 2
+Diretorio: /home/user/Downloads
+Deseja varrer com DELETE ativo? (S/N): n
+Deseja varrer com cache ativo? (s/n): s
+Escaneando: /home/user/Downloads
+Total: 150 arquivos
+Ameacas: 2
+- documento.pdf.exe: MEDIO
+- setup.exe: ALTO
 ```
 
 ### Sistema de Scoring
